@@ -1,15 +1,48 @@
-import React from "react";
+import React, { useState } from "react";
+
+type IndexStatus =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ok"; message: string }
+  | { kind: "error"; message: string };
 
 export default function Popup() {
-  function handleIndexBookmarks() {
-    // TODO: send INDEX_BOOKMARKS message to background service worker
-    // For now this is a visual stub — wiring comes in the next phase
-    console.warn("Index bookmarks: not yet implemented");
+  const [indexStatus, setIndexStatus] = useState<IndexStatus>({ kind: "idle" });
+
+  async function handleOpenGallery() {
+    // gallery.html is registered as a web-accessible resource in the manifest.
+    // getURL resolves to chrome-extension://[ID]/src/gallery/gallery.html
+    await chrome.tabs.create({
+      url: chrome.runtime.getURL("src/gallery/gallery.html"),
+    });
   }
 
-  function handleOpenGallery() {
-    // TODO: chrome.tabs.create({ url: chrome.runtime.getURL("gallery.html") })
-    console.warn("Open gallery: not yet implemented");
+  async function handleIndexBookmarks() {
+    setIndexStatus({ kind: "loading" });
+    try {
+      // Background worker finds/opens x.com/i/bookmarks and forwards the message
+      // to the content script, which runs the scraper and responds with a count.
+      const response = (await chrome.runtime.sendMessage({
+        type: "START_INDEXING",
+        payload: { incremental: false },
+      })) as { count?: number; error?: string } | undefined;
+
+      if (!response) {
+        setIndexStatus({ kind: "error", message: "No response from background." });
+      } else if (response.error) {
+        setIndexStatus({ kind: "error", message: response.error });
+      } else {
+        setIndexStatus({
+          kind: "ok",
+          message: `Found ${response.count ?? 0} tweet(s) — check x.com DevTools console.`,
+        });
+      }
+    } catch {
+      setIndexStatus({
+        kind: "error",
+        message: "Error. Is the bookmarks tab open?",
+      });
+    }
   }
 
   return (
@@ -22,9 +55,10 @@ export default function Popup() {
       <div className="flex flex-col gap-2">
         <button
           onClick={handleIndexBookmarks}
-          className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+          disabled={indexStatus.kind === "loading"}
+          className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Index bookmarks
+          {indexStatus.kind === "loading" ? "Scanning…" : "Index bookmarks"}
         </button>
 
         <button
@@ -34,6 +68,18 @@ export default function Popup() {
           Open gallery
         </button>
       </div>
+
+      {/* Status feedback — only shown after an index attempt */}
+      {indexStatus.kind === "ok" && (
+        <p className="mt-3 text-xs text-emerald-700 bg-emerald-50 rounded px-2 py-1">
+          {indexStatus.message}
+        </p>
+      )}
+      {indexStatus.kind === "error" && (
+        <p className="mt-3 text-xs text-red-700 bg-red-50 rounded px-2 py-1">
+          {indexStatus.message}
+        </p>
+      )}
 
       <p className="mt-4 text-center text-xs text-gray-400">v0.1.0 — local only</p>
     </div>
