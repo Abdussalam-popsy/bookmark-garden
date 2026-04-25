@@ -1,6 +1,37 @@
 import React, { useEffect, useState } from "react";
-import { db } from "@/lib/db";
 import type { Bookmark, ContentType } from "@/lib/db";
+
+/** Read all bookmarks via raw IndexedDB — bypasses Dexie which has a
+ *  known issue reading from extension pages when written by a service worker. */
+function readAllBookmarks(): Promise<Bookmark[]> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("BookmarkGarden");
+    req.onerror = () => reject(req.error);
+    req.onupgradeneeded = () => {
+      // DB doesn't exist yet — resolve empty rather than let upgrade proceed
+      req.transaction?.abort();
+      resolve([]);
+    };
+    req.onsuccess = () => {
+      const idb = req.result;
+      try {
+        const tx = idb.transaction("bookmarks", "readonly");
+        const all = tx.objectStore("bookmarks").getAll();
+        all.onerror = () => {
+          idb.close();
+          reject(all.error);
+        };
+        all.onsuccess = () => {
+          idb.close();
+          resolve(all.result as Bookmark[]);
+        };
+      } catch (e) {
+        idb.close();
+        reject(e);
+      }
+    };
+  });
+}
 
 const CONTENT_TYPES: Array<ContentType | "all"> = [
   "all",
@@ -30,10 +61,8 @@ export default function App() {
   function load() {
     setLoading(true);
     setError(null);
-    db.bookmarks
-      .toArray()
+    readAllBookmarks()
       .then((data) => {
-        // Sort newest-first in JS — avoids relying on index ordering
         data.sort(
           (a, b) => new Date(b.bookmarkedAt).getTime() - new Date(a.bookmarkedAt).getTime()
         );
