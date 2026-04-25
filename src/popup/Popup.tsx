@@ -34,7 +34,7 @@ export default function Popup() {
       } else {
         setIndexStatus({
           kind: "ok",
-          message: `Found ${response.count ?? 0} tweet(s) — check x.com DevTools console.`,
+          message: `Saved ${response.count ?? 0} bookmark${response.count !== 1 ? "s" : ""} to your garden.`,
         });
       }
     } catch {

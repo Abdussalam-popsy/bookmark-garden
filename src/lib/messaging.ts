@@ -27,6 +27,12 @@ export interface SaveBookmarkMessage {
   payload: Bookmark;
 }
 
+/** Content → Background: save all scraped bookmarks in one shot */
+export interface SaveBookmarksBatchMessage {
+  type: "SAVE_BOOKMARKS_BATCH";
+  payload: Bookmark[];
+}
+
 /** Background → Content: cancel an in-progress scrape */
 export interface StopIndexingMessage {
   type: "STOP_INDEXING";
@@ -46,6 +52,7 @@ export interface IndexingProgressMessage {
 export type ExtensionMessage =
   | StartIndexingMessage
   | SaveBookmarkMessage
+  | SaveBookmarksBatchMessage
   | StopIndexingMessage
   | IndexingProgressMessage;
 
@@ -83,5 +90,7 @@ export function onMessage(
     sender: chrome.runtime.MessageSender
   ) => void | boolean | Promise<unknown>
 ): void {
-  chrome.runtime.onMessage.addListener(handler as Parameters<typeof chrome.runtime.onMessage.addListener>[0]);
+  chrome.runtime.onMessage.addListener(
+    handler as Parameters<typeof chrome.runtime.onMessage.addListener>[0]
+  );
 }
