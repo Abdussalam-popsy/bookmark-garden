@@ -4,7 +4,7 @@
   "description": "Organise and browse your X bookmarks in a gallery you control.",
   "private": true,
   "scripts": {
-    "dev": "vite",
+    "dev": "vite build --watch",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src --ext .ts,.tsx --report-unused-disable-directives --max-warnings 0",
