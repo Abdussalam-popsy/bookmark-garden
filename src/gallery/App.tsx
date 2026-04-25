@@ -26,7 +26,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ContentType | "all">("all");
 
-  useEffect(() => {
+  function load() {
+    setLoading(true);
     db.bookmarks
       .orderBy("bookmarkedAt")
       .reverse()
@@ -39,10 +40,13 @@ export default function App() {
         console.error("[Bookmark Garden] failed to load bookmarks", err);
         setLoading(false);
       });
+  }
+
+  useEffect(() => {
+    load();
   }, []);
 
-  const filtered =
-    filter === "all" ? bookmarks : bookmarks.filter((b) => b.contentType === filter);
+  const filtered = filter === "all" ? bookmarks : bookmarks.filter((b) => b.contentType === filter);
 
   if (loading) {
     return (
@@ -75,6 +79,13 @@ export default function App() {
             <span className="text-xl">🌿</span>
             <h1 className="font-semibold text-gray-900">Bookmark Garden</h1>
             <span className="text-xs text-gray-400 ml-1">{bookmarks.length} bookmarks</span>
+            <button
+              onClick={load}
+              disabled={loading}
+              className="ml-2 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+            >
+              {loading ? "Loading…" : "Refresh"}
+            </button>
           </div>
 
           {/* Filter tabs */}
@@ -106,9 +117,7 @@ export default function App() {
       {/* Grid */}
       <main className="mx-auto max-w-7xl p-6">
         {filtered.length === 0 ? (
-          <p className="text-center text-sm text-gray-400 mt-12">
-            No {filter} bookmarks yet.
-          </p>
+          <p className="text-center text-sm text-gray-400 mt-12">No {filter} bookmarks yet.</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((bookmark) => (
@@ -180,9 +189,7 @@ function BookmarkCard({ bookmark }: { bookmark: Bookmark }) {
         </div>
 
         {/* Tweet text */}
-        {text && (
-          <p className="text-sm text-gray-700 line-clamp-3 leading-snug">{text}</p>
-        )}
+        {text && <p className="text-sm text-gray-700 line-clamp-3 leading-snug">{text}</p>}
 
         {/* Link card title */}
         {externalLink?.title && (

@@ -3,10 +3,10 @@
  *
  * On START_INDEXING:
  *   1. Injects a progress overlay into the page
- *   2. Scroll loop — parse visible tweets → deduplicate → scroll down → repeat
- *   3. Stops after MAX_EMPTY_SCROLLS consecutive scrolls with no new tweets
- *   4. Sends one SAVE_BOOKMARKS_BATCH to the background to write all to IndexedDB
- *   5. Responds to the popup with the final count
+ *   2. Scroll loop — parse visible tweets → deduplicate → scroll → repeat
+ *   3. Flushes to IndexedDB every FLUSH_BATCH_SIZE tweets so progress is
+ *      preserved even if the tab is closed mid-run
+ *   4. Stops after MAX_EMPTY_SCROLLS consecutive scrolls with no new tweets
  */
 
 import { isDev } from "@/lib/env";
@@ -18,46 +18,62 @@ if (isDev) {
   console.warn("[Bookmark Garden] content script active on", window.location.href);
 }
 
-/** ms to wait after each scroll for X to render new tweets */
 const SCROLL_DELAY_MS = 1500;
-/** Stop after this many consecutive scrolls that yield no new tweets */
-const MAX_EMPTY_SCROLLS = 3;
+const MAX_EMPTY_SCROLLS = 4;
+const FLUSH_BATCH_SIZE = 25; // write to DB after every N new tweets
 
-chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
-  if (message.type === "START_INDEXING") {
-    runIndexing()
-      .then((count) => sendResponse({ count }))
-      .catch((err: unknown) => sendResponse({ error: String(err) }));
-    return true; // keep channel open for async response
+chrome.runtime.onMessage.addListener(
+  (message: ExtensionMessage, _sender, sendResponse) => {
+    if (message.type === "START_INDEXING") {
+      runIndexing()
+        .then((count) => sendResponse({ count }))
+        .catch((err: unknown) => sendResponse({ error: String(err) }));
+      return true;
+    }
   }
-});
+);
 
 async function runIndexing(): Promise<number> {
   const overlay = createOverlay();
-
-  // Map keyed by tweet ID — deduplicates across scroll steps
-  const collected = new Map<string, Bookmark>();
+  const seen = new Set<string>();
+  const pending: Bookmark[] = []; // collected since last flush
+  let savedTotal = 0;
   let emptyScrolls = 0;
+
+  async function flush() {
+    if (pending.length === 0) return;
+    const batch = pending.splice(0); // drain and clear
+    try {
+      await chrome.runtime.sendMessage({ type: "SAVE_BOOKMARKS_BATCH", payload: batch });
+      savedTotal += batch.length;
+      if (isDev) console.warn(`[Bookmark Garden] flushed ${batch.length} → ${savedTotal} total saved`);
+    } catch (err) {
+      // Put them back so we can retry on the next flush
+      pending.unshift(...batch);
+      console.error("[Bookmark Garden] flush failed", err);
+    }
+  }
 
   while (emptyScrolls < MAX_EMPTY_SCROLLS) {
     const visible = parseAllVisibleTweets();
-    const fresh = visible.filter((t) => !collected.has(t.id));
+    const fresh = visible.filter((t) => !seen.has(t.id));
 
     for (const tweet of fresh) {
-      collected.set(tweet.id, tweet);
+      seen.add(tweet.id);
+      pending.push(tweet);
     }
 
     if (fresh.length > 0) {
       emptyScrolls = 0;
-      // Use the last visible tweet (oldest on screen) as the position indicator
       const oldest = visible[visible.length - 1];
-      const position = oldest ? formatDate(oldest.bookmarkedAt) : "";
-      overlay.update(collected.size, position);
+      overlay.update(seen.size, oldest ? formatDate(oldest.bookmarkedAt) : "");
+
+      if (pending.length >= FLUSH_BATCH_SIZE) {
+        await flush();
+      }
 
       if (isDev) {
-        console.warn(
-          `[Bookmark Garden] +${fresh.length} new tweets (${collected.size} total) @ ${position}`
-        );
+        console.warn(`[Bookmark Garden] +${fresh.length} (${seen.size} seen, ${savedTotal} saved)`);
       }
     } else {
       emptyScrolls++;
@@ -70,22 +86,11 @@ async function runIndexing(): Promise<number> {
     await sleep(SCROLL_DELAY_MS);
   }
 
-  const allBookmarks = [...collected.values()];
+  // Flush any remainder
+  await flush();
 
-  if (allBookmarks.length > 0) {
-    const result = (await chrome.runtime.sendMessage({
-      type: "SAVE_BOOKMARKS_BATCH",
-      payload: allBookmarks,
-    })) as { ok?: boolean; error?: string } | undefined;
-
-    if (result?.error) {
-      overlay.error(result.error);
-      throw new Error(result.error);
-    }
-  }
-
-  overlay.done(allBookmarks.length);
-  return allBookmarks.length;
+  overlay.done(seen.size);
+  return seen.size;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -93,10 +98,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 function formatDate(date: Date): string {
-  return new Date(date).toLocaleDateString("en-US", {
-    month: "short",
-    year: "numeric",
-  });
+  return new Date(date).toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
 // ── Progress overlay ──────────────────────────────────────────────────────────
@@ -108,7 +110,6 @@ interface Overlay {
 }
 
 function createOverlay(): Overlay {
-  // Remove any stale overlay from a previous run
   document.getElementById("bg-overlay")?.remove();
 
   const el = document.createElement("div");
@@ -133,25 +134,19 @@ function createOverlay(): Overlay {
 
   document.body.appendChild(el);
 
-  const render = (html: string) => {
-    el.innerHTML = html;
-  };
+  const render = (html: string) => { el.innerHTML = html; };
 
   render("<b>Bookmark Garden</b><br>Starting…");
 
   return {
     update(count, position) {
       render(
-        `<b>Bookmark Garden</b><br>` +
-          `Indexing… <b>${count}</b> found` +
+        `<b>Bookmark Garden</b><br>Indexing… <b>${count}</b> found` +
           (position ? `<br><span style="color:#8b98a5;font-size:11px">${position}</span>` : "")
       );
     },
     done(total) {
-      render(
-        `<b>Bookmark Garden</b><br>` +
-          `Done — <b>${total}</b> bookmark${total !== 1 ? "s" : ""} saved`
-      );
+      render(`<b>Bookmark Garden</b><br>Done — <b>${total}</b> bookmark${total !== 1 ? "s" : ""} saved`);
       setTimeout(() => el.remove(), 5000);
     },
     error(msg) {
