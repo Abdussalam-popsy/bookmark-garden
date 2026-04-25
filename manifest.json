@@ -6,13 +6,13 @@
   "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": ["https://x.com/*", "https://twitter.com/*"],
   "background": {
-    "service_worker": "src/background/index.ts",
+    "service_worker": "src/background/background.ts",
     "type": "module"
   },
   "content_scripts": [
     {
       "matches": ["https://x.com/i/bookmarks*"],
-      "js": ["src/content/index.ts"]
+      "js": ["src/content/content.ts"]
     }
   ],
   "action": {

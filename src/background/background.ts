@@ -18,18 +18,18 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
-chrome.runtime.onMessage.addListener(
-  (message: ExtensionMessage, _sender, sendResponse) => {
-    if (message.type === "START_INDEXING") {
-      // Must return true before doing any async work so Chrome keeps the
-      // message channel open while we await the tab query.
-      routeToBookmarksTab(message).then(sendResponse).catch((err: unknown) => {
+chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
+  if (message.type === "START_INDEXING") {
+    // Must return true before doing any async work so Chrome keeps the
+    // message channel open while we await the tab query.
+    routeToBookmarksTab(message)
+      .then(sendResponse)
+      .catch((err: unknown) => {
         sendResponse({ error: String(err) });
       });
-      return true;
-    }
+    return true;
   }
-);
+});
 
 async function routeToBookmarksTab(
   message: ExtensionMessage
@@ -38,12 +38,9 @@ async function routeToBookmarksTab(
   const tabs = await chrome.tabs.query({ url: "https://x.com/i/bookmarks*" });
 
   if (tabs.length === 0 || !tabs[0].id) {
-    // No tab open — open one. The content script won't be ready immediately,
-    // so tell the user to wait for it to load and try again.
-    await chrome.tabs.create({ url: "https://x.com/i/bookmarks" });
-    return {
-      error: "Opening x.com/i/bookmarks — wait for it to load, then press Index again.",
-    };
+    // Don't auto-open — let the user navigate there intentionally so the
+    // content script is fully loaded when they press Index.
+    return { error: "Open x.com/i/bookmarks first, then click Index." };
   }
 
   const tabId = tabs[0].id;
