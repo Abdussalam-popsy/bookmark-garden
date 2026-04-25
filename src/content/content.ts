@@ -22,16 +22,14 @@ const SCROLL_DELAY_MS = 1500;
 const MAX_EMPTY_SCROLLS = 4;
 const FLUSH_BATCH_SIZE = 25; // write to DB after every N new tweets
 
-chrome.runtime.onMessage.addListener(
-  (message: ExtensionMessage, _sender, sendResponse) => {
-    if (message.type === "START_INDEXING") {
-      runIndexing()
-        .then((count) => sendResponse({ count }))
-        .catch((err: unknown) => sendResponse({ error: String(err) }));
-      return true;
-    }
+chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
+  if (message.type === "START_INDEXING") {
+    runIndexing()
+      .then((count) => sendResponse({ count }))
+      .catch((err: unknown) => sendResponse({ error: String(err) }));
+    return true;
   }
-);
+});
 
 async function runIndexing(): Promise<number> {
   const overlay = createOverlay();
@@ -44,13 +42,19 @@ async function runIndexing(): Promise<number> {
     if (pending.length === 0) return;
     const batch = pending.splice(0); // drain and clear
     try {
-      await chrome.runtime.sendMessage({ type: "SAVE_BOOKMARKS_BATCH", payload: batch });
+      const result = (await chrome.runtime.sendMessage({
+        type: "SAVE_BOOKMARKS_BATCH",
+        payload: batch,
+      })) as { ok?: boolean; error?: string } | undefined;
+
+      if (result?.error) throw new Error(result.error);
+
       savedTotal += batch.length;
-      if (isDev) console.warn(`[Bookmark Garden] flushed ${batch.length} → ${savedTotal} total saved`);
+      overlay.setSaved(savedTotal);
     } catch (err) {
       // Put them back so we can retry on the next flush
       pending.unshift(...batch);
-      console.error("[Bookmark Garden] flush failed", err);
+      overlay.error(`Save failed: ${String(err)}`);
     }
   }
 
@@ -71,15 +75,8 @@ async function runIndexing(): Promise<number> {
       if (pending.length >= FLUSH_BATCH_SIZE) {
         await flush();
       }
-
-      if (isDev) {
-        console.warn(`[Bookmark Garden] +${fresh.length} (${seen.size} seen, ${savedTotal} saved)`);
-      }
     } else {
       emptyScrolls++;
-      if (isDev) {
-        console.warn(`[Bookmark Garden] empty scroll ${emptyScrolls}/${MAX_EMPTY_SCROLLS}`);
-      }
     }
 
     window.scrollBy(0, window.innerHeight);
@@ -105,6 +102,7 @@ function formatDate(date: Date): string {
 
 interface Overlay {
   update: (count: number, position: string) => void;
+  setSaved: (saved: number) => void;
   done: (total: number) => void;
   error: (msg: string) => void;
 }
@@ -134,25 +132,45 @@ function createOverlay(): Overlay {
 
   document.body.appendChild(el);
 
-  const render = (html: string) => { el.innerHTML = html; };
+  const render = (html: string) => {
+    el.innerHTML = html;
+  };
 
-  render("<b>Bookmark Garden</b><br>Starting…");
+  let _found = 0;
+  let _saved = 0;
+  let _position = "";
+
+  function renderState() {
+    render(
+      `<b>Bookmark Garden</b><br>` +
+        `Found <b>${_found}</b> · Saved <b>${_saved}</b>` +
+        (_position ? `<br><span style="color:#8b98a5;font-size:11px">${_position}</span>` : "")
+    );
+  }
+
+  renderState();
 
   return {
     update(count, position) {
-      render(
-        `<b>Bookmark Garden</b><br>Indexing… <b>${count}</b> found` +
-          (position ? `<br><span style="color:#8b98a5;font-size:11px">${position}</span>` : "")
-      );
+      _found = count;
+      _position = position;
+      renderState();
+    },
+    setSaved(saved) {
+      _saved = saved;
+      renderState();
     },
     done(total) {
-      render(`<b>Bookmark Garden</b><br>Done — <b>${total}</b> bookmark${total !== 1 ? "s" : ""} saved`);
+      render(
+        `<b>Bookmark Garden</b><br>` +
+          `Done — <b>${total}</b> bookmark${total !== 1 ? "s" : ""} saved ✓`
+      );
       setTimeout(() => el.remove(), 5000);
     },
     error(msg) {
       el.style.background = "#420c0c";
       render(`<b>Bookmark Garden</b><br><span style="color:#fca5a5">${msg}</span>`);
-      setTimeout(() => el.remove(), 6000);
+      setTimeout(() => el.remove(), 8000);
     },
   };
 }
