@@ -24,20 +24,24 @@ const TYPE_COLOURS: Record<ContentType, string> = {
 export default function App() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ContentType | "all">("all");
 
   function load() {
     setLoading(true);
+    setError(null);
     db.bookmarks
-      .orderBy("bookmarkedAt")
-      .reverse()
       .toArray()
       .then((data) => {
+        // Sort newest-first in JS — avoids relying on index ordering
+        data.sort(
+          (a, b) => new Date(b.bookmarkedAt).getTime() - new Date(a.bookmarkedAt).getTime()
+        );
         setBookmarks(data);
         setLoading(false);
       })
       .catch((err: unknown) => {
-        console.error("[Bookmark Garden] failed to load bookmarks", err);
+        setError(String(err));
         setLoading(false);
       });
   }
@@ -56,6 +60,23 @@ export default function App() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <p className="text-sm font-semibold text-red-600">Failed to load bookmarks</p>
+          <p className="mt-1 text-xs text-gray-500 font-mono">{error}</p>
+          <button
+            onClick={load}
+            className="mt-4 rounded bg-emerald-600 px-3 py-1 text-sm text-white"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (bookmarks.length === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -65,6 +86,12 @@ export default function App() {
           <p className="mt-2 text-sm text-gray-500">
             Go to x.com/i/bookmarks and click <b>Index bookmarks</b> in the popup.
           </p>
+          <button
+            onClick={load}
+            className="mt-4 rounded bg-gray-200 px-3 py-1 text-sm text-gray-700"
+          >
+            Refresh
+          </button>
         </div>
       </div>
     );
