@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Bookmark Garden",
+  "version": "0.1.0",
+  "description": "Organise and browse your X bookmarks in a gallery you control.",
+  "permissions": ["storage", "tabs", "scripting"],
+  "host_permissions": ["https://x.com/*", "https://twitter.com/*"],
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/i/bookmarks*"],
+      "js": ["src/content/index.ts"]
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Bookmark Garden"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["src/gallery/gallery.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
