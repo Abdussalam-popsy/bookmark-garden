@@ -52,13 +52,20 @@ export interface IndexingProgressMessage {
   };
 }
 
+/** Gallery → Background: persist updated tags for a bookmark */
+export interface UpdateBookmarkTagsMessage {
+  type: "UPDATE_BOOKMARK_TAGS";
+  payload: { id: string; tags: string[] };
+}
+
 /** Union of every message that can travel through the extension */
 export type ExtensionMessage =
   | StartIndexingMessage
   | SaveBookmarkMessage
   | SaveBookmarksBatchMessage
   | StopIndexingMessage
-  | IndexingProgressMessage;
+  | IndexingProgressMessage
+  | UpdateBookmarkTagsMessage;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

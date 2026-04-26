@@ -4,6 +4,12 @@ Append-only. Most recent at top. Add entries when features ship.
 
 ---
 
+## 2026-04-26 — Session 8
+
+- **feat: free-form tagging** — "+ tag" button on every card opens a modal. Chip input: Enter/comma adds a tag, × removes one, Backspace-on-empty removes the last. Tags saved to Dexie via `UPDATE_BOOKMARK_TAGS` message (gallery → background). Optimistic local state update — no reload needed. Existing tags shown as violet pills on cards and as filterable pills in the gallery header.
+
+---
+
 ## 2026-04-26 — Session 8 (planning)
 
 - **plan: approved roadmap for next builds**

@@ -44,6 +44,15 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
       .catch(() => sendResponse({ ok: true }));
     return true;
   }
+
+  if (message.type === "UPDATE_BOOKMARK_TAGS") {
+    const { id, tags } = message.payload;
+    db.bookmarks
+      .update(id, { tags })
+      .then(() => sendResponse({ ok: true }))
+      .catch((err: unknown) => sendResponse({ error: String(err) }));
+    return true;
+  }
 });
 
 async function forwardStopToBookmarksTab(): Promise<void> {
