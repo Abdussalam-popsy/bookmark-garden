@@ -1,6 +1,6 @@
 # Bookmark Garden — In Progress
 
-Last updated: 2026-04-25 (session 2)
+Last updated: 2026-04-26 (session 3)
 
 ---
 
@@ -79,26 +79,30 @@ Parses `article[data-testid="tweet"]` into typed `Bookmark` objects:
 
 ## Bugs fixed (session 2)
 - **Single end-of-run batch save** — originally saved all bookmarks in one shot at the end. If the user navigated away mid-run, nothing was saved. Fixed: flush every 25 tweets.
-- **Gallery empty after indexing** — gallery loads once on mount. If opened before or during indexing it shows nothing. Fixed: Refresh button + error display. Data confirmed in IndexedDB (308 entries). Gallery display still not working — see open bug below.
+- **Gallery empty after indexing** — gallery loads once on mount. If opened before or during indexing it shows nothing. Fixed: Refresh button + error display. Data confirmed in IndexedDB (308 entries). Gallery display still not working — see session 3 fix below.
+
+## Bugs fixed (session 3)
+- **Gallery blank page (React never mounts)** — `gallery.html` was only declared in `web_accessible_resources` in manifest.json. CRXJS v2 processes manifest-declared pages (popup, options) as full Vite HTML entries, but does NOT rewrite script srcs for WAR HTML files. The built `gallery.html` kept `<script src="./index.tsx">` pointing at a source file that doesn't exist in dist, causing `ERR_FILE_NOT_FOUND` and a blank `<div id="root">`. Fix: added `gallery: path.resolve(__dirname, "src/gallery/gallery.html")` to `build.rollupOptions.input` in `vite.config.ts`. Vite now bundles gallery's React app and rewrites the script src to `/assets/gallery-*.js`. Gallery should now mount — if records still don't show after remove+reload, the separate Dexie cross-context issue may still apply (see "What's next").
 
 ---
 
-## Open bug (blocked — next session priority)
+## Current status
 
-### Gallery shows "No bookmarks yet" despite 308 records in IndexedDB
-**What we know:**
-- IndexedDB → BookmarkGarden → bookmarks: **308 entries confirmed** (visible in DevTools)
-- Background `bulkPut` is definitely running (overlay shows `Saved N` incrementing)
-- Gallery query `db.bookmarks.toArray()` returns 0 records despite data being present
+Indexing pipeline is working:
+- Scroll loop runs, finds bookmarks, overlay shows progress
+- Data is being written to IndexedDB (confirmed 308 entries)
+- Gallery bundle now builds correctly and React mounts
+- **Pending verification**: remove+reload extension, open gallery, confirm 308 cards render
 
-**Theories to investigate:**
-1. The gallery tab's `db` instance is opening a *different* database — check if there are multiple `BookmarkGarden` databases under different origins (unlikely but possible if the extension ID changed between builds)
-2. Dexie 4 + `EntityTable` has a quirk where `toArray()` on the extension page context doesn't see data written by the service worker — look for open Dexie issues on this
-3. The gallery is reading correctly but React state isn't updating — add a raw `console.log(data)` immediately after `toArray()` resolves to confirm the array is populated before setState
-4. Try bypassing Dexie entirely: open IndexedDB directly with `indexedDB.open("BookmarkGarden")` in the gallery DevTools console to confirm the data is reachable from that page
+---
 
-**Quickest diagnostic (do this first thing):**
-Open the gallery tab → DevTools Console → paste:
+## What's next
+
+### Immediate (next session)
+1. **Verify gallery renders** — remove+reload extension, open gallery, confirm cards show. If blank despite bundle loading, run the IndexedDB diagnostic below to check if Dexie cross-context is still the issue.
+2. **Verify scraper field quality** — expand a record in IndexedDB DevTools, check text/media/contentType fields are populated correctly
+
+**If gallery still blank after bundle fix** — run in gallery DevTools console:
 ```js
 const req = indexedDB.open("BookmarkGarden");
 req.onsuccess = e => {
@@ -108,24 +112,7 @@ req.onsuccess = e => {
   store.count().onsuccess = r => console.log("count:", r.target.result);
 };
 ```
-If this logs `count: 308`, Dexie is the issue. If it logs `count: 0`, wrong origin.
-
----
-
-## Current status
-
-Indexing pipeline is working:
-- Scroll loop runs, finds bookmarks, overlay shows progress
-- Data is being written to IndexedDB (confirmed 308 records)
-- **Gallery display is broken** — data is there but not rendering
-
----
-
-## What's next
-
-### Immediate (next session)
-1. **Fix gallery** — run the raw IndexedDB diagnostic above, identify root cause, fix
-2. **Verify scraper field quality** — expand a record in IndexedDB DevTools, check text/media/contentType fields are populated correctly
+If `count: 308` → Dexie is the issue. If `count: 0` → wrong origin (extension ID changed).
 
 ### After gallery is working
 3. Search — `db.bookmarks.toArray()` + client-side Fuse.js fuzzy search on text + handle

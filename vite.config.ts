@@ -11,6 +11,17 @@ export default defineConfig({
     // content scripts, service worker, popup, and web-accessible pages.
     crx({ manifest }),
   ],
+  build: {
+    rollupOptions: {
+      // Explicitly declare gallery.html as an entry so Vite bundles its
+      // index.tsx and rewrites the script src — CRXJS only does this
+      // automatically for manifest-declared pages (popup, options, etc.),
+      // not for web_accessible_resources HTML files.
+      input: {
+        gallery: path.resolve(__dirname, "src/gallery/gallery.html"),
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
