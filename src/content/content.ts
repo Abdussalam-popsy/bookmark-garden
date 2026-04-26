@@ -19,24 +19,33 @@ if (isDev) {
 }
 
 const SCROLL_DELAY_MS = 1500;
-const MAX_EMPTY_SCROLLS = 4;
+/** Full scan: be patient, tweets can be slow to appear at the end of the list */
+const MAX_EMPTY_SCROLLS_FULL = 4;
+/** Resume scan: once we've passed the resume point all remaining tweets are old — stop quickly */
+const MAX_EMPTY_SCROLLS_RESUME = 2;
 const FLUSH_BATCH_SIZE = 25; // write to DB after every N new tweets
 
 chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
   if (message.type === "START_INDEXING") {
-    runIndexing()
+    const { resumeAfterTweetId } = message.payload;
+    runIndexing(resumeAfterTweetId)
       .then((count) => sendResponse({ count }))
       .catch((err: unknown) => sendResponse({ error: String(err) }));
     return true;
   }
 });
 
-async function runIndexing(): Promise<number> {
+async function runIndexing(resumeAfterTweetId: string | null): Promise<number> {
   const overlay = createOverlay();
-  const seen = new Set<string>();
-  const pending: Bookmark[] = []; // collected since last flush
+  const seen = new Set<string>(); // all tweet IDs encountered — for dedup only
+  const pending: Bookmark[] = []; // net-new tweets queued for the next flush
   let savedTotal = 0;
+  let totalNew = 0; // net-new tweets found this run (shown in overlay / returned)
   let emptyScrolls = 0;
+
+  // BigInt for fast numeric Snowflake ID comparison; null = full scan
+  const resumeId = resumeAfterTweetId !== null ? BigInt(resumeAfterTweetId) : null;
+  const maxEmptyScrolls = resumeId !== null ? MAX_EMPTY_SCROLLS_RESUME : MAX_EMPTY_SCROLLS_FULL;
 
   async function flush() {
     if (pending.length === 0) return;
@@ -58,19 +67,26 @@ async function runIndexing(): Promise<number> {
     }
   }
 
-  while (emptyScrolls < MAX_EMPTY_SCROLLS) {
+  while (emptyScrolls < maxEmptyScrolls) {
     const visible = parseAllVisibleTweets();
+    // fresh = not seen this session (dedup across scrolls)
     const fresh = visible.filter((t) => !seen.has(t.id));
+    // netNew = fresh tweets that are newer than the resume point (or all if full scan)
+    const netNew: Bookmark[] = [];
 
     for (const tweet of fresh) {
-      seen.add(tweet.id);
-      pending.push(tweet);
+      seen.add(tweet.id); // always track for dedup
+      if (resumeId === null || BigInt(tweet.id) > resumeId) {
+        netNew.push(tweet);
+        pending.push(tweet);
+      }
     }
 
-    if (fresh.length > 0) {
+    if (netNew.length > 0) {
+      totalNew += netNew.length;
       emptyScrolls = 0;
-      const oldest = visible[visible.length - 1];
-      overlay.update(seen.size, oldest ? formatDate(oldest.bookmarkedAt) : "");
+      const oldest = netNew[netNew.length - 1];
+      overlay.update(totalNew, oldest ? formatDate(oldest.bookmarkedAt) : "");
 
       if (pending.length >= FLUSH_BATCH_SIZE) {
         await flush();
@@ -86,8 +102,8 @@ async function runIndexing(): Promise<number> {
   // Flush any remainder
   await flush();
 
-  overlay.done(seen.size);
-  return seen.size;
+  overlay.done(totalNew);
+  return totalNew;
 }
 
 function sleep(ms: number): Promise<void> {

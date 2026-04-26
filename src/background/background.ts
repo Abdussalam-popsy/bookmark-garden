@@ -70,10 +70,34 @@ async function saveBatch(bookmarks: Bookmark[]): Promise<number> {
   }));
 
   await db.bookmarks.bulkPut(records);
+  await updateLastIndexedId(records.map((r) => r.id));
 
   if (isDev) {
     console.warn(`[Bookmark Garden] saved ${records.length} bookmarks to IndexedDB`);
   }
 
   return records.length;
+}
+
+/**
+ * Keep chrome.storage.local["lastIndexedTweetId"] pointing to the highest
+ * (newest) tweet ID we've successfully saved. Uses Snowflake ID numeric
+ * ordering — higher ID = newer tweet, monotonically increasing.
+ */
+async function updateLastIndexedId(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+
+  const batchMax = ids.reduce((max, id) => {
+    const bid = BigInt(id);
+    return bid > max ? bid : max;
+  }, BigInt(0));
+
+  const stored = await chrome.storage.local.get("lastIndexedTweetId");
+  const storedMax = stored.lastIndexedTweetId
+    ? BigInt(stored.lastIndexedTweetId as string)
+    : BigInt(0);
+
+  if (batchMax > storedMax) {
+    await chrome.storage.local.set({ lastIndexedTweetId: batchMax.toString() });
+  }
 }

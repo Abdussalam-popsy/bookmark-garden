@@ -18,7 +18,11 @@ import type { Bookmark } from "./db";
 /** Popup → Background: kick off a scrape run */
 export interface StartIndexingMessage {
   type: "START_INDEXING";
-  payload: { incremental: boolean };
+  payload: {
+    mode: "resume" | "full";
+    /** Highest tweet ID already indexed; null means start from scratch */
+    resumeAfterTweetId: string | null;
+  };
 }
 
 /** Content → Background: save one scraped bookmark */

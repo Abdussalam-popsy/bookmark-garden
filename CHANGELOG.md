@@ -4,6 +4,12 @@ Append-only. Most recent at top. Add entries when features ship.
 
 ---
 
+## 2026-04-26 — Session 5
+
+- **feat: resumable indexing** — popup now shows "Index new bookmarks" (resume mode) after first run, plus a "Reindex all" button for full re-scans. Background tracks `lastIndexedTweetId` in `chrome.storage.local` as the high-water mark (Snowflake ID BigInt comparison). Content script filters tweets by ID and stops after 2 consecutive empty scrolls once past the resume point (vs 4 for full scans). "Already up to date" message shown when nothing new is found.
+
+---
+
 ## 2026-04-26 — Session 4
 
 - **note: mid-flight partial index** — ran indexing during session; reached ~533 found / 514 saved at Sep 2025 before session close. Total bookmarks across all runs roughly ~1500. No resumable indexing yet — first run of that feature (next session) will fill any gaps from this partial run.

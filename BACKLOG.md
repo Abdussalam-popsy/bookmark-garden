@@ -8,19 +8,7 @@ Append-only. Add new items to the appropriate section. Move items to CHANGELOG.m
 
 Items to build in the next 1–2 sessions, in order.
 
-- **Resumable indexing** — track the most-recently-bookmarked tweet ID we've successfully captured. On re-run, stop scrolling once we hit it. Offer a "Reindex everything" option in popup settings to override and do a full scan. Prevents re-scanning 978+ tweets every time.
-
-  **Approved design (2026-04-26):**
-
-  _Resume point:_ Store the highest tweet ID successfully saved as `settings["lastIndexedTweetId"]`. Use Snowflake ID numeric ordering (BigInt comparison on string IDs) — higher ID = newer tweet, monotonically increasing, millisecond-precise. Updated by background after each successful `bulkPut`, only if the new max exceeds the stored value.
-
-  _Stop condition:_ Content script receives `resumeAfterTweetId` in the `START_INDEXING` message. For each parsed tweet, compare ID numerically: `id > resumeAfterTweetId` → new, process it; `id <= resumeAfterTweetId` → already indexed, skip. Stop after 2 consecutive scroll steps with 0 net-new tweets (tightened from 4 — once past the resume point all subsequent tweets are old, so 2 is enough). Don't stop mid-batch; always complete the current parse + flush before checking.
-
-  _Popup UX:_ Two buttons — "Index new bookmarks" (passes resume point, default after first run) and "Reindex all" (passes `null`, full scan). Both disable during a run.
-
-  _Gaps/deleted tweets:_ Not a problem. Snowflake ordering means ID gaps (deleted tweets, unbookmarked content) don't affect the stop condition — numeric comparison still works across gaps. Known limitation: records for tweets removed from X bookmarks stay in local DB until "Reindex all" + a future sync-deletions feature.
-
-  _Files to touch:_ `messaging.ts` (extend `START_INDEXING`), `background.ts` (read/write settings key, pass to content, update after batch), `content.ts` (receive resume point, add ID comparison to stop logic), `Popup.tsx` (two buttons, "Up to date" state).
+- **Stop / pause indexing** — popup "Stop" button that cancels an in-progress scan mid-run. Currently the scroll loop keeps going with no way to abort it. Background sends `STOP_INDEXING` to content script (message type already defined in `messaging.ts`); content script checks a flag each loop iteration and flushes remaining pending tweets before exiting cleanly.
 
 - **Indexing progress visible everywhere** — popup shows live indexing status even when the x.com tab is in the background. Badge on the extension icon shows running count. State persisted in `chrome.storage.local` so it survives tab switches.
 

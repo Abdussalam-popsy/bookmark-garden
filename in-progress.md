@@ -29,7 +29,7 @@ None. Gallery is rendering. No known broken flows.
 
 ## Next session's focus
 
-Implement resumable indexing — approach is approved and fully documented in BACKLOG.md under "Resumable indexing." Start there, no re-derivation needed. Files to touch: `messaging.ts`, `background.ts`, `content.ts`, `Popup.tsx`.
+Resumable indexing is shipped. Test it: remove+reload extension, open x.com/i/bookmarks, click "Index bookmarks" (first run = full scan). After completion, popup should show "Index new bookmarks" + "Reindex all". Next feature: sort by date dropdown in gallery.
 
 ---
 

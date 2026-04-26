@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 type IndexStatus =
   | { kind: "idle" }
@@ -8,40 +8,63 @@ type IndexStatus =
 
 export default function Popup() {
   const [indexStatus, setIndexStatus] = useState<IndexStatus>({ kind: "idle" });
+  // undefined = still loading from storage; null = never indexed; string = resume point ID
+  const [lastIndexedTweetId, setLastIndexedTweetId] = useState<string | null | undefined>(
+    undefined
+  );
+
+  useEffect(() => {
+    chrome.storage.local
+      .get("lastIndexedTweetId")
+      .then((stored) => {
+        setLastIndexedTweetId((stored.lastIndexedTweetId as string) ?? null);
+      })
+      .catch(() => setLastIndexedTweetId(null));
+  }, []);
+
+  const hasIndexed = typeof lastIndexedTweetId === "string";
+  const isLoading = indexStatus.kind === "loading";
 
   async function handleOpenGallery() {
-    // gallery.html is registered as a web-accessible resource in the manifest.
-    // getURL resolves to chrome-extension://[ID]/src/gallery/gallery.html
     await chrome.tabs.create({
       url: chrome.runtime.getURL("src/gallery/gallery.html"),
     });
   }
 
-  async function handleIndexBookmarks() {
+  async function handleIndex(mode: "resume" | "full") {
     setIndexStatus({ kind: "loading" });
+    const resumeAfterTweetId = mode === "resume" ? (lastIndexedTweetId ?? null) : null;
+
     try {
-      // Background worker finds/opens x.com/i/bookmarks and forwards the message
-      // to the content script, which runs the scraper and responds with a count.
       const response = (await chrome.runtime.sendMessage({
         type: "START_INDEXING",
-        payload: { incremental: false },
+        payload: { mode, resumeAfterTweetId },
       })) as { count?: number; error?: string } | undefined;
 
       if (!response) {
         setIndexStatus({ kind: "error", message: "No response from background." });
-      } else if (response.error) {
-        setIndexStatus({ kind: "error", message: response.error });
-      } else {
-        setIndexStatus({
-          kind: "ok",
-          message: `Saved ${response.count ?? 0} bookmark${response.count !== 1 ? "s" : ""} to your garden.`,
-        });
+        return;
       }
-    } catch {
+      if (response.error) {
+        setIndexStatus({ kind: "error", message: response.error });
+        return;
+      }
+
+      const count = response.count ?? 0;
       setIndexStatus({
-        kind: "error",
-        message: "Error. Is the bookmarks tab open?",
+        kind: "ok",
+        message:
+          count === 0
+            ? "Already up to date — no new bookmarks found."
+            : `Saved ${count} new bookmark${count !== 1 ? "s" : ""} to your garden.`,
       });
+
+      // Refresh the resume point so the next click picks up the new high-water mark
+      chrome.storage.local.get("lastIndexedTweetId").then((stored) => {
+        setLastIndexedTweetId((stored.lastIndexedTweetId as string) ?? null);
+      });
+    } catch {
+      setIndexStatus({ kind: "error", message: "Error. Is the bookmarks tab open?" });
     }
   }
 
@@ -53,13 +76,32 @@ export default function Popup() {
       </header>
 
       <div className="flex flex-col gap-2">
-        <button
-          onClick={handleIndexBookmarks}
-          disabled={indexStatus.kind === "loading"}
-          className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {indexStatus.kind === "loading" ? "Scanning…" : "Index bookmarks"}
-        </button>
+        {hasIndexed ? (
+          <>
+            <button
+              onClick={() => handleIndex("resume")}
+              disabled={isLoading}
+              className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? "Scanning…" : "Index new bookmarks"}
+            </button>
+            <button
+              onClick={() => handleIndex("full")}
+              disabled={isLoading}
+              className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Reindex all
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => handleIndex("full")}
+            disabled={isLoading || lastIndexedTweetId === undefined}
+            className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? "Scanning…" : "Index bookmarks"}
+          </button>
+        )}
 
         <button
           onClick={handleOpenGallery}
