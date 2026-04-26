@@ -90,9 +90,7 @@ function extractAuthorInfo(el: Element, tweetId: string): AuthorInfo | null {
   // "/elonmusk/status/123" → split on "/" → index 1 = "elonmusk".
   // Far more reliable than parsing the display text, which can contain
   // verified badges, emoji, and multiple nested spans.
-  const statusHref = el
-    .querySelector(`a[href*="/status/${tweetId}"]`)
-    ?.getAttribute("href");
+  const statusHref = el.querySelector(`a[href*="/status/${tweetId}"]`)?.getAttribute("href");
   const handle = statusHref?.split("/")?.[1];
   if (!handle) return null;
 
@@ -112,6 +110,12 @@ function extractAuthorInfo(el: Element, tweetId: string): AuthorInfo | null {
 // ── Text ─────────────────────────────────────────────────────────────────────
 
 function extractText(el: Element): string {
+  // X native articles replace tweetText with a distinct title element.
+  // Use the headline as the text field so the card has meaningful content.
+  const articleTitle = el.querySelector('[data-testid="twitter-article-title"]');
+  if (articleTitle) {
+    return articleTitle.textContent?.trim() ?? "";
+  }
   // textContent gives us plain text — links show as their display label
   // (e.g. "github.com/…" not the full t.co URL), hashtags as "#tag", etc.
   return el.querySelector('[data-testid="tweetText"]')?.textContent?.trim() ?? "";
@@ -211,6 +215,13 @@ function classifyContent(
   text: string,
   el: Element
 ): ContentType {
+  // 0. X native article — detected by its unique read-view container.
+  //    Hero image (if present) is captured by extractMedia via tweetPhoto.
+  //    Headline is captured by extractText via twitter-article-title.
+  if (el.querySelector('[data-testid="twitterArticleReadView"]')) {
+    return "article";
+  }
+
   // 1. Any video element present → video (includes GIFs)
   if (el.querySelector("video") || media.some((m) => m.type === "video")) {
     return "video";
@@ -233,10 +244,7 @@ function classifyContent(
 
   // 5. Thread signals: 🧵 emoji, word "thread", or a nested quoted tweet
   // (a quote tweet renders as a second [data-testid="tweet"] inside the outer one)
-  if (
-    /🧵|thread/i.test(text) ||
-    el.querySelectorAll('[data-testid="tweet"]').length > 1
-  ) {
+  if (/🧵|thread/i.test(text) || el.querySelectorAll('[data-testid="tweet"]').length > 1) {
     return "thread";
   }
 

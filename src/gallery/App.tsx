@@ -17,8 +17,14 @@ function readAllBookmarks(): Promise<Bookmark[]> {
       try {
         const tx = idb.transaction("bookmarks", "readonly");
         const all = tx.objectStore("bookmarks").getAll();
-        all.onerror = () => { idb.close(); reject(all.error); };
-        all.onsuccess = () => { idb.close(); resolve(all.result as Bookmark[]); };
+        all.onerror = () => {
+          idb.close();
+          reject(all.error);
+        };
+        all.onsuccess = () => {
+          idb.close();
+          resolve(all.result as Bookmark[]);
+        };
       } catch (e) {
         idb.close();
         reject(e);
@@ -27,8 +33,28 @@ function readAllBookmarks(): Promise<Bookmark[]> {
   });
 }
 
+function exportBookmarks(bookmarks: Bookmark[]) {
+  const json = JSON.stringify(bookmarks, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const date = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `bookmark-garden-${date}.bookmarkgarden`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 const CONTENT_TYPES: Array<ContentType | "all"> = [
-  "all", "article", "video", "design", "thread", "code", "note",
+  "all",
+  "article",
+  "video",
+  "design",
+  "thread",
+  "code",
+  "note",
 ];
 
 const TYPE_COLOURS: Record<ContentType, string> = {
@@ -58,6 +84,11 @@ function sortBookmarks(bookmarks: Bookmark[], sort: SortKey): Bookmark[] {
   });
 }
 
+interface ImportPending {
+  bookmarks: Bookmark[];
+  suggestedName: string;
+}
+
 export default function App() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,45 +97,96 @@ export default function App() {
   const [sort, setSort] = useState<SortKey>("newest");
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [collectionFilter, setCollectionFilter] = useState<string | null>(null);
   const [activeCard, setActiveCard] = useState<Bookmark | null>(null);
+  const [importPending, setImportPending] = useState<ImportPending | null>(null);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   function load() {
     setLoading(true);
     setError(null);
     readAllBookmarks()
-      .then((data) => { setBookmarks(data); setLoading(false); })
-      .catch((err: unknown) => { setError(String(err)); setLoading(false); });
+      .then((data) => {
+        setBookmarks(data);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        setError(String(err));
+        setLoading(false);
+      });
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
-  // Optimistic update: apply new tags to local state without a reload
   function applyTagUpdate(id: string, tags: string[]) {
     setBookmarks((prev) => prev.map((b) => (b.id === id ? { ...b, tags } : b)));
     setActiveCard((prev) => (prev?.id === id ? { ...prev, tags } : prev));
   }
 
-  const sorted = sortBookmarks(bookmarks, sort);
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const suggestedName = file.name.replace(/\.bookmarkgarden$/, "");
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        if (!Array.isArray(data)) throw new Error("Invalid format: expected an array");
+        setImportPending({ bookmarks: data as Bookmark[], suggestedName });
+      } catch {
+        alert("Could not read file. Make sure it is a valid .bookmarkgarden file.");
+      }
+    };
+    reader.readAsText(file);
+  }
 
-  const fuse = useMemo(
-    () => new Fuse(sorted, {
-      keys: ["text", "authorHandle", "authorName", "tags", "notes"],
-      threshold: 0.35,
-      ignoreLocation: true,
-    }),
-    [sorted]
-  );
+  function applyImport(imported: Bookmark[], collectionName: string) {
+    setBookmarks((prev) => {
+      const map = new Map(prev.map((b) => [b.id, b]));
+      for (const b of imported) map.set(b.id, b);
+      return [...map.values()];
+    });
+    setImportSuccess(`Imported ${imported.length} bookmarks into "${collectionName}"`);
+    setTimeout(() => setImportSuccess(null), 6000);
+  }
 
-  const searched = query.trim() ? fuse.search(query).map((r) => r.item) : sorted;
-  const tagFiltered = tagFilter ? searched.filter((b) => b.tags.includes(tagFilter)) : searched;
-  const filtered = filter === "all" ? tagFiltered : tagFiltered.filter((b) => b.contentType === filter);
-
-  // All unique tags across the full library (for the tag filter row)
   const allTags = useMemo(() => {
     const set = new Set<string>();
     bookmarks.forEach((b) => b.tags.forEach((t) => set.add(t)));
     return [...set].sort();
   }, [bookmarks]);
+
+  const allCollections = useMemo(() => {
+    const set = new Set<string>();
+    bookmarks.forEach((b) => b.collections?.forEach((c) => set.add(c)));
+    return [...set].sort();
+  }, [bookmarks]);
+
+  const sorted = sortBookmarks(bookmarks, sort);
+
+  const fuse = useMemo(
+    () =>
+      new Fuse(sorted, {
+        keys: ["text", "authorHandle", "authorName", "tags", "notes"],
+        threshold: 0.35,
+        ignoreLocation: true,
+      }),
+    [sorted]
+  );
+
+  const searched = query.trim() ? fuse.search(query).map((r) => r.item) : sorted;
+  const tagFiltered = tagFilter ? searched.filter((b) => b.tags.includes(tagFilter)) : searched;
+  const collectionFiltered = collectionFilter
+    ? tagFiltered.filter((b) => b.collections?.includes(collectionFilter))
+    : tagFiltered;
+  const filtered =
+    filter === "all"
+      ? collectionFiltered
+      : collectionFiltered.filter((b) => b.contentType === filter);
 
   if (loading) {
     return (
@@ -120,7 +202,10 @@ export default function App() {
         <div className="text-center">
           <p className="text-sm font-semibold text-red-600">Failed to load bookmarks</p>
           <p className="mt-1 text-xs text-gray-500 font-mono">{error}</p>
-          <button onClick={load} className="mt-4 rounded bg-emerald-600 px-3 py-1 text-sm text-white">
+          <button
+            onClick={load}
+            className="mt-4 rounded bg-emerald-600 px-3 py-1 text-sm text-white"
+          >
             Retry
           </button>
         </div>
@@ -137,10 +222,41 @@ export default function App() {
           <p className="mt-2 text-sm text-gray-500">
             Go to x.com/i/bookmarks and click <b>Index bookmarks</b> in the popup.
           </p>
-          <button onClick={load} className="mt-4 rounded bg-gray-200 px-3 py-1 text-sm text-gray-700">
-            Refresh
-          </button>
+          <p className="mt-1 text-sm text-gray-500">
+            Or import a <b>.bookmarkgarden</b> file from another device.
+          </p>
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <button onClick={load} className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700">
+              Refresh
+            </button>
+            <button
+              onClick={() => importInputRef.current?.click()}
+              className="rounded bg-sky-600 px-3 py-1 text-sm text-white hover:bg-sky-700"
+            >
+              Import .bookmarkgarden
+            </button>
+          </div>
+          {importSuccess && (
+            <p className="mt-3 text-sm text-emerald-600 font-medium">{importSuccess}</p>
+          )}
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".bookmarkgarden"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
         </div>
+        {importPending && (
+          <ImportModal
+            pending={importPending}
+            onClose={() => setImportPending(null)}
+            onImport={(imported, collectionName) => {
+              setImportPending(null);
+              applyImport(imported, collectionName);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -149,7 +265,7 @@ export default function App() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/90 backdrop-blur px-6 py-3 space-y-2">
-        {/* Row 1: title + search + sort */}
+        {/* Row 1: title + search + sort + export/import */}
         <div className="mx-auto max-w-7xl flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="text-xl">🌿</span>
@@ -182,17 +298,45 @@ export default function App() {
             className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
             {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
-              <option key={key} value={key}>{SORT_LABELS[key]}</option>
+              <option key={key} value={key}>
+                {SORT_LABELS[key]}
+              </option>
             ))}
           </select>
+
+          <div className="ml-auto flex items-center gap-2">
+            {importSuccess && (
+              <span className="text-xs text-emerald-600 font-medium">{importSuccess}</span>
+            )}
+            <button
+              onClick={() => exportBookmarks(bookmarks)}
+              className="rounded-md border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Export
+            </button>
+            <button
+              onClick={() => importInputRef.current?.click()}
+              className="rounded-md border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Import
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".bookmarkgarden"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+          </div>
         </div>
 
         {/* Row 2: content-type filter + tag filter */}
         <div className="mx-auto max-w-7xl flex flex-wrap gap-1">
           {CONTENT_TYPES.map((type) => {
-            const count = type === "all"
-              ? bookmarks.length
-              : bookmarks.filter((b) => b.contentType === type).length;
+            const count =
+              type === "all"
+                ? bookmarks.length
+                : bookmarks.filter((b) => b.contentType === type).length;
             if (type !== "all" && count === 0) return null;
             return (
               <button
@@ -209,7 +353,6 @@ export default function App() {
             );
           })}
 
-          {/* Tag filter pills — only shown when tags exist */}
           {allTags.length > 0 && (
             <>
               <span className="self-center text-gray-300 text-xs mx-1">|</span>
@@ -229,6 +372,36 @@ export default function App() {
             </>
           )}
         </div>
+
+        {/* Row 3: collections filter — only shown when imported collections exist */}
+        {allCollections.length > 0 && (
+          <div className="mx-auto max-w-7xl flex flex-wrap gap-1 items-center">
+            <span className="text-xs text-gray-400 mr-1">Collections:</span>
+            <button
+              onClick={() => setCollectionFilter(null)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                collectionFilter === null
+                  ? "bg-sky-600 text-white"
+                  : "bg-sky-50 text-sky-700 hover:bg-sky-100"
+              }`}
+            >
+              All
+            </button>
+            {allCollections.map((col) => (
+              <button
+                key={col}
+                onClick={() => setCollectionFilter(collectionFilter === col ? null : col)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  collectionFilter === col
+                    ? "bg-sky-600 text-white"
+                    : "bg-sky-50 text-sky-700 hover:bg-sky-100"
+                }`}
+              >
+                {col}
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       {/* Grid */}
@@ -258,20 +431,27 @@ export default function App() {
           onSave={(tags) => applyTagUpdate(activeCard.id, tags)}
         />
       )}
+
+      {/* Import modal */}
+      {importPending && (
+        <ImportModal
+          pending={importPending}
+          onClose={() => setImportPending(null)}
+          onImport={(imported, collectionName) => {
+            setImportPending(null);
+            applyImport(imported, collectionName);
+          }}
+        />
+      )}
     </div>
   );
 }
 
 // ── BookmarkCard ──────────────────────────────────────────────────────────────
 
-function BookmarkCard({
-  bookmark,
-  onTagClick,
-}: {
-  bookmark: Bookmark;
-  onTagClick: () => void;
-}) {
-  const { authorName, authorHandle, authorAvatar, text, media, externalLink, contentType } = bookmark;
+function BookmarkCard({ bookmark, onTagClick }: { bookmark: Bookmark; onTagClick: () => void }) {
+  const { authorName, authorHandle, authorAvatar, text, media, externalLink, contentType } =
+    bookmark;
 
   const heroImage =
     media.find((m) => m.type === "video")?.posterUrl ??
@@ -310,12 +490,18 @@ function BookmarkCard({
         {/* Author row */}
         <div className="flex items-center gap-2">
           {authorAvatar ? (
-            <img src={authorAvatar} alt={authorName} className="h-8 w-8 shrink-0 rounded-full object-cover" />
+            <img
+              src={authorAvatar}
+              alt={authorName}
+              className="h-8 w-8 shrink-0 rounded-full object-cover"
+            />
           ) : (
             <div className="h-8 w-8 shrink-0 rounded-full bg-gray-200" />
           )}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-gray-900 leading-tight">{authorName}</p>
+            <p className="truncate text-sm font-semibold text-gray-900 leading-tight">
+              {authorName}
+            </p>
             <p className="truncate text-xs text-gray-400">@{authorHandle}</p>
           </div>
           <TypeBadge type={contentType} />
@@ -353,7 +539,11 @@ function BookmarkCard({
             })}
           </p>
           <button
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTagClick(); }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onTagClick();
+            }}
             className="text-xs text-gray-400 hover:text-violet-600 transition-colors px-1"
             title="Add / edit tags"
           >
@@ -362,6 +552,101 @@ function BookmarkCard({
         </div>
       </div>
     </a>
+  );
+}
+
+// ── ImportModal ───────────────────────────────────────────────────────────────
+
+function ImportModal({
+  pending,
+  onClose,
+  onImport,
+}: {
+  pending: ImportPending;
+  onClose: () => void;
+  onImport: (bookmarks: Bookmark[], collectionName: string) => void;
+}) {
+  const [name, setName] = useState(pending.suggestedName);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.select();
+  }, []);
+
+  async function handleImport() {
+    const collectionName = name.trim() || pending.suggestedName;
+    setImporting(true);
+    setImportError(null);
+
+    const withCollection: Bookmark[] = pending.bookmarks.map((b) => ({
+      ...b,
+      collections: [`Imported from ${collectionName}`],
+    }));
+
+    try {
+      const res = (await chrome.runtime.sendMessage({
+        type: "IMPORT_BOOKMARKS",
+        payload: withCollection,
+      })) as { ok?: boolean; count?: number; error?: string } | undefined;
+
+      if (res?.error) throw new Error(res.error);
+      onImport(withCollection, collectionName);
+    } catch (err) {
+      setImportError(String(err));
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">Name this collection</h2>
+          <p className="mt-1 text-xs text-gray-500">
+            {pending.bookmarks.length} bookmarks will be imported. They will be grouped under a
+            collection you can browse separately.
+          </p>
+        </div>
+
+        <input
+          ref={inputRef}
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleImport();
+          }}
+          placeholder={pending.suggestedName}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+        />
+
+        {importError && <p className="text-xs text-red-600">{importError}</p>}
+
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onClose}
+            className="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleImport}
+            disabled={importing}
+            className="rounded-lg bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+          >
+            {importing ? "Importing…" : `Import ${pending.bookmarks.length} bookmarks`}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -382,7 +667,9 @@ function TagModal({
   const [saveError, setSaveError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   function commitInput() {
     const t = input.trim();
@@ -423,7 +710,11 @@ function TagModal({
         {/* Author */}
         <div className="flex items-center gap-2">
           {bookmark.authorAvatar ? (
-            <img src={bookmark.authorAvatar} alt={bookmark.authorName} className="h-9 w-9 rounded-full object-cover" />
+            <img
+              src={bookmark.authorAvatar}
+              alt={bookmark.authorName}
+              className="h-9 w-9 rounded-full object-cover"
+            />
           ) : (
             <div className="h-9 w-9 rounded-full bg-gray-200" />
           )}
@@ -467,7 +758,10 @@ function TagModal({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === ",") { e.preventDefault(); commitInput(); }
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              commitInput();
+            }
             if (e.key === "Backspace" && !input) setTags((prev) => prev.slice(0, -1));
           }}
           onBlur={commitInput}
@@ -510,7 +804,9 @@ function TagModal({
 
 function TypeBadge({ type }: { type: ContentType }) {
   return (
-    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${TYPE_COLOURS[type]}`}>
+    <span
+      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${TYPE_COLOURS[type]}`}
+    >
       {type}
     </span>
   );

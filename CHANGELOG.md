@@ -4,6 +4,20 @@ Append-only. Most recent at top. Add entries when features ship.
 
 ---
 
+## 2026-04-26 — Session 10
+
+- **fix: X native article scraping** — X Articles rendered as blank cards because `[data-testid="tweetText"]` is absent on article cards. `extractText` now checks for `[data-testid="twitter-article-title"]` first and uses the article headline as the text field. `classifyContent` detects `[data-testid="twitterArticleReadView"]` (present only on X Article cards) as rule 0 and returns `"article"` immediately. Hero image was already captured by the existing `extractMedia` logic via `[data-testid="tweetPhoto"]`. Existing blank records require a re-scrape — no migration possible since the DOM signals were never stored.
+
+---
+
+## 2026-04-26 — Session 9
+
+- **feat: export `.bookmarkgarden`** — "Export" button in gallery header serialises all bookmarks (main library + imported collections) to a JSON file downloaded as `bookmark-garden-YYYY-MM-DD.bookmarkgarden`. No new dependencies — pure Blob + URL.createObjectURL.
+- **feat: import `.bookmarkgarden`** — "Import" button opens a file picker accepting `.bookmarkgarden` files. After file selection, a modal prompts for a collection name (filename pre-filled as default). Bookmarks are written to Dexie via a new `IMPORT_BOOKMARKS` background message (bulkPut — imported version wins on collision). Each imported bookmark gets `collections: ["Imported from <name>"]`. Import does NOT update `lastIndexedTweetId` so incremental X scans are unaffected.
+- **feat: collections filter row** — gallery header shows a third filter row (sky-blue pills) whenever imported collections exist. Clicking a collection pill filters to only those bookmarks; clicking again or "All" resets. Composes with existing content-type and tag filters.
+
+---
+
 ## 2026-04-26 — Session 8
 
 - **feat: free-form tagging** — "+ tag" button on every card opens a modal. Chip input: Enter/comma adds a tag, × removes one, Backspace-on-empty removes the last. Tags saved to Dexie via `UPDATE_BOOKMARK_TAGS` message (gallery → background). Optimistic local state update — no reload needed. Existing tags shown as violet pills on cards and as filterable pills in the gallery header.

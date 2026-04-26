@@ -53,6 +53,13 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
       .catch((err: unknown) => sendResponse({ error: String(err) }));
     return true;
   }
+
+  if (message.type === "IMPORT_BOOKMARKS") {
+    importBatch(message.payload)
+      .then((count) => sendResponse({ ok: true, count }))
+      .catch((err: unknown) => sendResponse({ error: String(err) }));
+    return true;
+  }
 });
 
 async function forwardStopToBookmarksTab(): Promise<void> {
@@ -95,6 +102,21 @@ async function routeToBookmarksTab(
       error: "Content script not ready — refresh x.com/i/bookmarks and try again.",
     };
   }
+}
+
+/**
+ * Import bookmarks from a .bookmarkgarden file.
+ * Does NOT update lastIndexedTweetId — imported IDs should not shift the
+ * resume point for future incremental scans from X.
+ */
+async function importBatch(bookmarks: Bookmark[]): Promise<number> {
+  const records = bookmarks.map((bm) => ({
+    ...bm,
+    bookmarkedAt: new Date(bm.bookmarkedAt),
+    indexedAt: new Date(bm.indexedAt),
+  }));
+  await db.bookmarks.bulkPut(records);
+  return records.length;
 }
 
 async function saveBatch(bookmarks: Bookmark[]): Promise<number> {

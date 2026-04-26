@@ -58,6 +58,12 @@ export interface UpdateBookmarkTagsMessage {
   payload: { id: string; tags: string[] };
 }
 
+/** Gallery → Background: bulk-import bookmarks from a .bookmarkgarden file */
+export interface ImportBookmarksMessage {
+  type: "IMPORT_BOOKMARKS";
+  payload: Bookmark[];
+}
+
 /** Union of every message that can travel through the extension */
 export type ExtensionMessage =
   | StartIndexingMessage
@@ -65,7 +71,8 @@ export type ExtensionMessage =
   | SaveBookmarksBatchMessage
   | StopIndexingMessage
   | IndexingProgressMessage
-  | UpdateBookmarkTagsMessage;
+  | UpdateBookmarkTagsMessage
+  | ImportBookmarksMessage;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
