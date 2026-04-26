@@ -4,6 +4,13 @@ Append-only. Most recent at top. Add entries when features ship.
 
 ---
 
+## 2026-04-26 — Session 7
+
+- **feat: sort by date** — gallery header now has a sort dropdown: Newest first / Oldest first / Recently indexed. Sorting is applied in render so switching is instant with no reload.
+- **fix: SPA injection** — background now injects the content script programmatically via `scripting.executeScript` before every `sendMessage` call, fixing the "content script not ready" error caused by x.com's client-side navigation never triggering a real page load.
+
+---
+
 ## 2026-04-26 — Session 6
 
 - **feat: stop/cancel indexing** — popup shows a red "Stop indexing" button whenever a scan is in progress, replacing the normal index buttons. Clicking it sends `STOP_INDEXING` through the message bus (popup → background → content). Content script checks the flag after each scroll step, flushes any pending tweets, then exits cleanly. Overlay shows "Stopped — N bookmarks saved ✓". Everything saved before the stop is preserved.

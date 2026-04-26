@@ -52,20 +52,39 @@ const TYPE_COLOURS: Record<ContentType, string> = {
   note: "bg-gray-100 text-gray-600",
 };
 
+type SortKey = "newest" | "oldest" | "indexed";
+
+const SORT_LABELS: Record<SortKey, string> = {
+  newest: "Newest first",
+  oldest: "Oldest first",
+  indexed: "Recently indexed",
+};
+
+function sortBookmarks(bookmarks: Bookmark[], sort: SortKey): Bookmark[] {
+  return [...bookmarks].sort((a, b) => {
+    if (sort === "oldest") {
+      return new Date(a.bookmarkedAt).getTime() - new Date(b.bookmarkedAt).getTime();
+    }
+    if (sort === "indexed") {
+      return new Date(b.indexedAt).getTime() - new Date(a.indexedAt).getTime();
+    }
+    // newest (default)
+    return new Date(b.bookmarkedAt).getTime() - new Date(a.bookmarkedAt).getTime();
+  });
+}
+
 export default function App() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ContentType | "all">("all");
+  const [sort, setSort] = useState<SortKey>("newest");
 
   function load() {
     setLoading(true);
     setError(null);
     readAllBookmarks()
       .then((data) => {
-        data.sort(
-          (a, b) => new Date(b.bookmarkedAt).getTime() - new Date(a.bookmarkedAt).getTime()
-        );
         setBookmarks(data);
         setLoading(false);
       })
@@ -79,7 +98,8 @@ export default function App() {
     load();
   }, []);
 
-  const filtered = filter === "all" ? bookmarks : bookmarks.filter((b) => b.contentType === filter);
+  const sorted = sortBookmarks(bookmarks, sort);
+  const filtered = filter === "all" ? sorted : sorted.filter((b) => b.contentType === filter);
 
   if (loading) {
     return (
@@ -143,6 +163,19 @@ export default function App() {
               {loading ? "Loading…" : "Refresh"}
             </button>
           </div>
+
+          {/* Sort dropdown */}
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+              <option key={key} value={key}>
+                {SORT_LABELS[key]}
+              </option>
+            ))}
+          </select>
 
           {/* Filter tabs */}
           <div className="flex flex-wrap gap-1">
