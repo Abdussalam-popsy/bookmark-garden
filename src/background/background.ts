@@ -64,6 +64,20 @@ async function routeToBookmarksTab(
 
   const tabId = tabs[0].id;
 
+  // x.com is a SPA — navigating to /i/bookmarks via the sidebar doesn't
+  // trigger a real page load, so Chrome's manifest-based content script
+  // injection may never fire. Inject programmatically every time to be safe.
+  // The content script guards against double-registration internally.
+  const contentScriptFile = chrome.runtime.getManifest().content_scripts?.[0]?.js?.[0];
+  if (contentScriptFile) {
+    await chrome.scripting
+      .executeScript({
+        target: { tabId },
+        files: [contentScriptFile],
+      })
+      .catch(() => {}); // silently ignore if tab is not injectable
+  }
+
   try {
     const response = await chrome.tabs.sendMessage(tabId, message);
     return response as { count: number };

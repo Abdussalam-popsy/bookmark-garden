@@ -29,21 +29,27 @@ const FLUSH_BATCH_SIZE = 25; // write to DB after every N new tweets
 /** Set to true when STOP_INDEXING is received; checked between scroll steps */
 let stopRequested = false;
 
-chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
-  if (message.type === "START_INDEXING") {
-    stopRequested = false;
-    const { resumeAfterTweetId } = message.payload;
-    runIndexing(resumeAfterTweetId)
-      .then((count) => sendResponse({ count }))
-      .catch((err: unknown) => sendResponse({ error: String(err) }));
-    return true;
-  }
+// Guard against double-registration when background injects this script
+// programmatically into a tab that already has it from the manifest declaration.
+if (!(globalThis as Record<string, unknown>).__bgContentLoaded) {
+  (globalThis as Record<string, unknown>).__bgContentLoaded = true;
 
-  if (message.type === "STOP_INDEXING") {
-    stopRequested = true;
-    sendResponse({ ok: true });
-  }
-});
+  chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
+    if (message.type === "START_INDEXING") {
+      stopRequested = false;
+      const { resumeAfterTweetId } = message.payload;
+      runIndexing(resumeAfterTweetId)
+        .then((count) => sendResponse({ count }))
+        .catch((err: unknown) => sendResponse({ error: String(err) }));
+      return true;
+    }
+
+    if (message.type === "STOP_INDEXING") {
+      stopRequested = true;
+      sendResponse({ ok: true });
+    }
+  });
+}
 
 async function runIndexing(resumeAfterTweetId: string | null): Promise<number> {
   const overlay = createOverlay();
