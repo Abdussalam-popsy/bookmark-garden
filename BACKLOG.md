@@ -2,7 +2,20 @@
 
 Append-only. Add new items to the appropriate section. Move items to CHANGELOG.md when shipped.
 
-Shipped items removed from this file: Search (Fuse.js, S8), Tagging (S8), Sort by date (S7), Export/Import .bookmarkgarden (S9).
+Shipped items removed from this file: Search (Fuse.js, S8), Tagging (S8), Sort by date (S7), Export/Import .bookmarkgarden (S9), Date range filter (S11).
+
+---
+
+## Pre-launch — must ship before Store submission
+
+Non-negotiable quality bar. These gate the Chrome Web Store release.
+
+- [ ] **Virtual scrolling** — 6000+ bookmarks make the gallery unusable. `react-window` or `@tanstack/react-virtual`. Non-negotiable.
+- [ ] **Masonry / content-aware layout** — makes the gallery look intentional rather than placeholder. Two card variants: media-first and text-only.
+- [ ] **Per-collection export / sharing** — export a single collection as its own `.bookmarkgarden`. Core sharing primitive.
+- [ ] **Indexing reliability** — long runs (1000+ bookmarks) without silent failure, dropped batches, or stalling. Needs field testing.
+- [ ] **Landing page** — `absalom.dev` (or subdomain). Required for Store listing and word-of-mouth sharing.
+- [ ] **Chrome Web Store submission** — screenshots, description, privacy policy, review process.
 
 ---
 
@@ -13,8 +26,6 @@ Items to build in the next 1–2 sessions, in order.
 - **Virtual scrolling / performance** — only render cards visible in the viewport. At 6000+ records the gallery is already lagging. `react-window` or `@tanstack/react-virtual`. No data changes needed — pure render optimisation.
 
 - **Notes UI** — `notes` field already exists on every `Bookmark` record in Dexie. Needs: a textarea in the tag/detail modal, and write-back via a new `UPDATE_BOOKMARK_NOTES` message (gallery → background → `db.bookmarks.update(id, { notes })`).
-
-- **Date range filter** — filter gallery by year, month, or date range. "Show me everything I saved in January 2024." `bookmarkedAt` is already indexed so queries are cheap. UI: a year/month picker in the header, or a start/end date input.
 
 - **Gallery persistence across extension reload** — when the gallery tab is open, set `galleryOpen: true` in `chrome.storage.local` on mount. Background checks this flag on `onInstalled`/`onStartup` and re-opens the gallery tab automatically. Clears the flag on unload.
 
@@ -57,3 +68,17 @@ Items to build in the next 1–2 sessions, in order.
 - **Chrome Web Store submission** — screenshots, description, privacy policy, review process.
 
 - **Public landing page** — marketing page describing the extension.
+
+- **AI chat interface** — bring-your-own API key; natural language queries over your bookmark index ("show me everything about typography from 2024", "what did I save about system design?"). RAG over the local IndexedDB corpus.
+
+- **Obsidian sync** — export bookmarks as markdown files into a local vault directory. One `.md` per bookmark or per author, with frontmatter (tags, date, URL). Pairs with the per-collection export already in the backlog.
+
+- **Resurface / second brain mode** — periodically surface old bookmarks you haven't revisited. Could be a daily notification, a "today's memory" card on gallery open, or a dedicated Resurface tab. Weighted toward older, untagged, or high-engagement bookmarks.
+
+- **Multi-platform support** — scraper support for Instagram bookmarks and LinkedIn saves. Each platform needs its own scraper built from scratch (different DOM, different auth model). X must be stable and launched before touching this.
+
+- **Swipe / focus view** — single-bookmark full-screen mode. Arrow or swipe through bookmarks one at a time. Natural fit for daily review and resurface mode. Removes distraction of the grid during active reading.
+
+- **Daily review mode** — surface 10 bookmarks you haven't revisited in a while, presented in swipe/focus view. Spaced repetition for ideas. Pairs directly with resurface mode.
+
+- **Reminders** — flag a bookmark as "read later" and get a notification or resurface prompt at a set time. Chrome alarms API + `chrome.notifications`.

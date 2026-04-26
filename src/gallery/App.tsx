@@ -74,6 +74,21 @@ const SORT_LABELS: Record<SortKey, string> = {
   indexed: "Recently indexed",
 };
 
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
 function sortBookmarks(bookmarks: Bookmark[], sort: SortKey): Bookmark[] {
   return [...bookmarks].sort((a, b) => {
     if (sort === "oldest")
@@ -98,6 +113,8 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [collectionFilter, setCollectionFilter] = useState<string | null>(null);
+  const [filterYear, setFilterYear] = useState<number | null>(null);
+  const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [activeCard, setActiveCard] = useState<Bookmark | null>(null);
   const [importPending, setImportPending] = useState<ImportPending | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
@@ -166,6 +183,22 @@ export default function App() {
     return [...set].sort();
   }, [bookmarks]);
 
+  const allYears = useMemo(() => {
+    const set = new Set<number>();
+    bookmarks.forEach((b) => set.add(new Date(b.bookmarkedAt).getFullYear()));
+    return [...set].sort((a, b) => b - a); // newest year first
+  }, [bookmarks]);
+
+  const availableMonths = useMemo(() => {
+    if (filterYear === null) return [];
+    const set = new Set<number>();
+    bookmarks.forEach((b) => {
+      const d = new Date(b.bookmarkedAt);
+      if (d.getFullYear() === filterYear) set.add(d.getMonth() + 1);
+    });
+    return [...set].sort((a, b) => a - b);
+  }, [bookmarks, filterYear]);
+
   const sorted = sortBookmarks(bookmarks, sort);
 
   const fuse = useMemo(
@@ -183,10 +216,17 @@ export default function App() {
   const collectionFiltered = collectionFilter
     ? tagFiltered.filter((b) => b.collections?.includes(collectionFilter))
     : tagFiltered;
+  const dateFiltered =
+    filterYear !== null
+      ? collectionFiltered.filter((b) => {
+          const d = new Date(b.bookmarkedAt);
+          if (d.getFullYear() !== filterYear) return false;
+          if (filterMonth !== null && d.getMonth() + 1 !== filterMonth) return false;
+          return true;
+        })
+      : collectionFiltered;
   const filtered =
-    filter === "all"
-      ? collectionFiltered
-      : collectionFiltered.filter((b) => b.contentType === filter);
+    filter === "all" ? dateFiltered : dateFiltered.filter((b) => b.contentType === filter);
 
   if (loading) {
     return (
@@ -303,6 +343,50 @@ export default function App() {
               </option>
             ))}
           </select>
+
+          <select
+            value={filterYear ?? ""}
+            onChange={(e) => {
+              const y = e.target.value ? Number(e.target.value) : null;
+              setFilterYear(y);
+              setFilterMonth(null);
+            }}
+            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="">All years</option>
+            {allYears.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+
+          {filterYear !== null && (
+            <>
+              <select
+                value={filterMonth ?? ""}
+                onChange={(e) => setFilterMonth(e.target.value ? Number(e.target.value) : null)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">All months</option>
+                {availableMonths.map((m) => (
+                  <option key={m} value={m}>
+                    {MONTH_NAMES[m - 1]}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => {
+                  setFilterYear(null);
+                  setFilterMonth(null);
+                }}
+                className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                title="Clear date filter"
+              >
+                ×
+              </button>
+            </>
+          )}
 
           <div className="ml-auto flex items-center gap-2">
             {importSuccess && (

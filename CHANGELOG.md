@@ -4,6 +4,14 @@ Append-only. Most recent at top. Add entries when features ship.
 
 ---
 
+## 2026-04-26 — Session 11
+
+- **feat: date range filter** — year dropdown in gallery header, dynamically populated from the years present in the bookmark index (no hardcoded values). Selecting a year reveals a month picker filtered to only months that have bookmarks in that year. An × button clears both. Date filter composes with search, content-type, tag, and collection filters — nothing resets when a date is selected.
+- **docs: pre-launch checklist** — added a gated pre-launch section to BACKLOG with 6 non-negotiable items before Chrome Web Store submission: virtual scrolling, masonry layout, per-collection export, indexing reliability, landing page, Store submission.
+- **docs: backlog additions** — logged 7 new Someday/maybe items: AI chat interface (BYOK), Obsidian sync, resurface/second brain mode, multi-platform support (Instagram/LinkedIn), swipe/focus view, daily review mode, reminders.
+
+---
+
 ## 2026-04-26 — Session 10
 
 - **fix: X native article scraping** — X Articles rendered as blank cards because `[data-testid="tweetText"]` is absent on article cards. `extractText` now checks for `[data-testid="twitter-article-title"]` first and uses the article headline as the text field. `classifyContent` detects `[data-testid="twitterArticleReadView"]` (present only on X Article cards) as rule 0 and returns `"article"` immediately. Hero image was already captured by the existing `extractMedia` logic via `[data-testid="tweetPhoto"]`. Existing blank records require a re-scrape — no migration possible since the DOM signals were never stored.
