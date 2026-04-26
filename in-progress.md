@@ -1,136 +1,73 @@
 # Bookmark Garden — In Progress
 
-Last updated: 2026-04-26 (session 3)
+Last updated: 2026-04-26 (session 4)
 
 ---
 
-## What's been built
+## Current state
 
-### Infrastructure
-- Vite 8 + CRXJS 2.0.0 + React 19 + TypeScript (strict) + Tailwind CSS 3
-- ESLint + Prettier configured
-- `npm run dev` runs `vite build --watch` — rebuilds in ~400ms on every save
-- Load workflow: **remove** extension from chrome://extensions → Load unpacked → select `dist/`
-  (Reload button alone leaves stale service worker state — always remove+re-add)
-
-### Extension structure
-```
-src/
-  background/background.ts   Service worker — routes START_INDEXING, handles SAVE_BOOKMARKS_BATCH
-  content/content.ts         Content script — scroll loop, progress overlay, flush to background
-  content/scraper.ts         DOM parser — parseTweetElement(), parseAllVisibleTweets()
-  gallery/                   React gallery app — reads from Dexie, card grid, filter tabs
-  popup/                     React popup with Index + Open gallery buttons
-  lib/
-    db.ts                    Dexie schema + TypeScript interfaces
-    messaging.ts             Typed message union (ExtensionMessage)
-    env.ts                   isDev guard (tree-shaken in prod builds)
-manifest.json                MV3, read by CRXJS at build time
-```
-
-### Message flow (working end-to-end)
-```
-Popup → background → content (on x.com/i/bookmarks)
-Content → background (SAVE_BOOKMARKS_BATCH every 25 tweets)
-background → IndexedDB (db.bookmarks.bulkPut)
-```
-
-### Scroll loop (`src/content/content.ts`)
-- Auto-scrolls x.com/i/bookmarks, parses new tweets after each scroll step
-- Deduplicates by tweet ID using a `Set<string>` — re-running is safe (no duplicates)
-- Flushes to IndexedDB every 25 tweets so progress is saved even if tab is closed mid-run
-- Stops after 4 consecutive scrolls with no new tweets
-- Progress overlay injected into the x.com page: shows `Found N · Saved N` + date position
-- Overlay shows `Done — N bookmarks saved ✓` at completion, fades after 5s
-- Flush errors appear in the overlay (red), not just console
-
-### Scraper (`src/content/scraper.ts`)
-Parses `article[data-testid="tweet"]` into typed `Bookmark` objects:
-- Tweet ID → from `/username/status/ID` permalink
-- Author handle → same permalink, split on `/`
-- Display name → `[data-testid="User-Name"] a[href="/handle"] span span`
-- Avatar → `img[src*="profile_images"]`
-- Tweet text → `[data-testid="tweetText"]` textContent
-- Images → `[data-testid="tweetPhoto"] img` filtered to `pbs.twimg.com/media`
-- Video → `<video>` element + poster attribute
-- Link card → `[data-testid="card.wrapper"]` → first anchor URL + detail spans
-- Timestamp → `time[datetime]`
-- Content type classifier: video > code > design > article > thread > note
-
-### Dexie schema (`src/lib/db.ts`) — wired and writing
-- `bookmarks` — primary key `id`, indexed on authorHandle, indexedAt, bookmarkedAt, contentType, *tags, *collections
-- `tags` — auto-increment id, unique name
-- `collections` — auto-increment id, unique name
-- `settings` — key/value store
-- Background uses `db.bookmarks.bulkPut()` — upsert by tweet ID, safe to re-index
-
-### Gallery (`src/gallery/App.tsx`)
-- Reads all bookmarks from Dexie via `toArray()` + JS sort (newest first)
-- Responsive 4-column card grid — hero image, author row, type badge, tweet text, date
-- Content-type filter tabs: All / Article / Video / Design / Thread / Code / Note
-- Refresh button in header (gallery only loads on mount — must refresh manually after indexing)
-- Error state renders in UI if DB query fails (not just console)
+Extension is functional end-to-end. Indexing pipeline scrolls x.com/i/bookmarks, parses tweets into typed Bookmark records, flushes to IndexedDB every 25 tweets, and the gallery React app reads and renders them. Roughly ~1500 bookmarks indexed across runs (including a partial mid-session run reaching Sep 2025). No tagging, search, or sort yet. Next session starts immediately on resumable indexing — approach approved and fully documented in BACKLOG.md.
 
 ---
 
-## Bugs fixed (session 1)
-- **CRXJS service worker bundle mixup** — both entry files named `index.ts` caused CRXJS to load the content script bundle as the service worker. Fixed by renaming to `background.ts` / `content.ts`.
-- **Dev mode CORS error** — `vite dev` causes service worker CORS failure (CRXJS + Vite 8 incompatibility). Fixed by switching `npm run dev` to `vite build --watch`.
+## What works
 
-## Bugs fixed (session 2)
-- **Single end-of-run batch save** — originally saved all bookmarks in one shot at the end. If the user navigated away mid-run, nothing was saved. Fixed: flush every 25 tweets.
-- **Gallery empty after indexing** — gallery loads once on mount. If opened before or during indexing it shows nothing. Fixed: Refresh button + error display. Data confirmed in IndexedDB (308 entries). Gallery display still not working — see session 3 fix below.
-
-## Bugs fixed (session 3)
-- **Gallery blank page (React never mounts)** — `gallery.html` was only declared in `web_accessible_resources` in manifest.json. CRXJS v2 processes manifest-declared pages (popup, options) as full Vite HTML entries, but does NOT rewrite script srcs for WAR HTML files. The built `gallery.html` kept `<script src="./index.tsx">` pointing at a source file that doesn't exist in dist, causing `ERR_FILE_NOT_FOUND` and a blank `<div id="root">`. Fix: added `gallery: path.resolve(__dirname, "src/gallery/gallery.html")` to `build.rollupOptions.input` in `vite.config.ts`. Vite now bundles gallery's React app and rewrites the script src to `/assets/gallery-*.js`. Gallery should now mount — if records still don't show after remove+reload, the separate Dexie cross-context issue may still apply (see "What's next").
+- Scroll loop with live overlay (Found N · Saved N, errors surfaced in red)
+- DOM scraper: ID, handle, display name, avatar, text, media, link card, timestamp, content type
+- IndexedDB writes via `bulkPut` — re-indexing is safe (upsert by tweet ID)
+- Gallery: 4-column card grid, content-type filter tabs, Refresh button
+- Build: `npm run dev` = `vite build --watch`, ~400ms rebuilds
+- Load workflow: always **remove + reload** (not refresh) to avoid stale service worker
 
 ---
 
-## Current status
+## Active blockers
 
-Indexing pipeline is working:
-- Scroll loop runs, finds bookmarks, overlay shows progress
-- Data is being written to IndexedDB (confirmed 308 entries)
-- Gallery bundle now builds correctly and React mounts
-- **Pending verification**: remove+reload extension, open gallery, confirm 308 cards render
+None. Gallery is rendering. No known broken flows.
 
 ---
 
-## What's next
+## Next session's focus
 
-### Immediate (next session)
-1. **Verify gallery renders** — remove+reload extension, open gallery, confirm cards show. If blank despite bundle loading, run the IndexedDB diagnostic below to check if Dexie cross-context is still the issue.
-2. **Verify scraper field quality** — expand a record in IndexedDB DevTools, check text/media/contentType fields are populated correctly
+Implement resumable indexing — approach is approved and fully documented in BACKLOG.md under "Resumable indexing." Start there, no re-derivation needed. Files to touch: `messaging.ts`, `background.ts`, `content.ts`, `Popup.tsx`.
 
-**If gallery still blank after bundle fix** — run in gallery DevTools console:
-```js
-const req = indexedDB.open("BookmarkGarden");
-req.onsuccess = e => {
-  const db = e.target.result;
-  const tx = db.transaction("bookmarks", "readonly");
-  const store = tx.objectStore("bookmarks");
-  store.count().onsuccess = r => console.log("count:", r.target.result);
-};
+---
+
+## Data shape reference
+
+### Bookmark record fields
+
+| Field | Type | Indexed? | Notes |
+|---|---|---|---|
+| `id` | `string` | **primary key** | Tweet ID — stable, used for upsert |
+| `authorHandle` | `string` | yes | e.g. `"naval"` |
+| `authorName` | `string` | no | Display name |
+| `authorAvatar` | `string` | no | Profile image URL |
+| `text` | `string` | no | Full tweet text |
+| `media` | `MediaItem[]` | no | Array of image/video objects |
+| `externalLink` | `ExternalLink \| null` | no | Link card data |
+| `contentType` | `ContentType` | yes | `"article" \| "video" \| "design" \| "thread" \| "code" \| "note"` |
+| `tags` | `string[]` | yes (multi-entry) | Each tag indexed separately |
+| `collections` | `string[]` | yes (multi-entry) | Each collection indexed separately |
+| `notes` | `string` | no | Freeform user notes |
+| `bookmarkedAt` | `Date` | yes | When bookmarked on X |
+| `indexedAt` | `Date` | yes | When we scraped it |
+| `xFolder` | `string \| null` | no | X's native folder name, if any |
+
+**`MediaItem`** — `{ type: "image"|"video", url, width?, height?, posterUrl?, duration? }`
+
+**`ExternalLink`** — `{ url, title?, description?, image?, siteName? }`
+
+### What "indexed" means in practice
+
+**Indexed fields** (`authorHandle`, `contentType`, `bookmarkedAt`, `indexedAt`, `tags`, `collections`) can be queried directly and cheaply:
+```ts
+db.bookmarks.where("contentType").equals("video").toArray()
+db.bookmarks.where("authorHandle").equals("naval").toArray()
+db.bookmarks.where("bookmarkedAt").between(start, end).toArray()
+db.bookmarks.where("tags").equals("typography").toArray()
 ```
-If `count: 308` → Dexie is the issue. If `count: 0` → wrong origin (extension ID changed).
 
-### After gallery is working
-3. Search — `db.bookmarks.toArray()` + client-side Fuse.js fuzzy search on text + handle
-4. Masonry grid — replace CSS grid with `react-masonry-css`, card variants per content type
-5. Rule-based classification improvements — inspect real records, tune selectors
-6. Tagging UI — add/remove tags inline on cards
-7. Collections — create, assign, view
-8. OG metadata fetch — background worker fetches article `og:` tags for richer link cards
-9. Export — JSON, CSV, per-collection HTML
+**Unindexed fields** (`text`, `authorName`, `media`, `externalLink`, `notes`, `xFolder`) require a full scan — load all records then filter in JS. Fine for 978 records, worth noting for search.
 
-### V2 (later)
-- Resume from last indexed position (track oldest saved tweet ID, scroll to it on re-run)
-- LLM tagging via Claude API or local Ollama (~$0.003/bookmark with Haiku)
-
----
-
-## Known issues / watch list
-- X changes their DOM structure 2–4x/year — selectors will break. We use `data-testid` attributes where possible.
-- Media URLs from X are sometimes signed and expire — store tweet ID as the durable key, re-index to refresh.
-- `isDev` is always `false` in both `npm run build` and `npm run dev` (`vite build --watch` is a production build). All `console.warn` calls guarded by `isDev` are invisible. Use the service worker DevTools panel to debug background issues.
-- Re-indexing is safe (bulkPut upserts) but always re-scans from the top — no resume yet.
+Date range filters (`bookmarkedAt`, `indexedAt`) are cheap and ideal for sort/filter UI. Author filtering is also cheap. Full-text search on `text` requires JS-side Fuse.js (full scan, acceptable at this scale).
