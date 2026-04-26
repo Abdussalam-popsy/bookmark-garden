@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import Fuse from "fuse.js";
 import type { Bookmark, ContentType } from "@/lib/db";
 
 /** Read all bookmarks via raw IndexedDB — bypasses Dexie which has a
@@ -79,6 +80,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ContentType | "all">("all");
   const [sort, setSort] = useState<SortKey>("newest");
+  const [query, setQuery] = useState("");
 
   function load() {
     setLoading(true);
@@ -99,7 +101,20 @@ export default function App() {
   }, []);
 
   const sorted = sortBookmarks(bookmarks, sort);
-  const filtered = filter === "all" ? sorted : sorted.filter((b) => b.contentType === filter);
+
+  // Fuse instance rebuilt only when the sorted list changes
+  const fuse = useMemo(
+    () =>
+      new Fuse(sorted, {
+        keys: ["text", "authorHandle", "authorName", "tags", "notes"],
+        threshold: 0.35,
+        ignoreLocation: true,
+      }),
+    [sorted]
+  );
+
+  const searched = query.trim() ? fuse.search(query).map((r) => r.item) : sorted;
+  const filtered = filter === "all" ? searched : searched.filter((b) => b.contentType === filter);
 
   if (loading) {
     return (
@@ -154,7 +169,11 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="text-xl">🌿</span>
             <h1 className="font-semibold text-gray-900">Bookmark Garden</h1>
-            <span className="text-xs text-gray-400 ml-1">{bookmarks.length} bookmarks</span>
+            <span className="text-xs text-gray-400 ml-1">
+              {filtered.length === bookmarks.length
+                ? `${bookmarks.length} bookmarks`
+                : `${filtered.length} of ${bookmarks.length}`}
+            </span>
             <button
               onClick={load}
               disabled={loading}
@@ -163,6 +182,15 @@ export default function App() {
               {loading ? "Loading…" : "Refresh"}
             </button>
           </div>
+
+          {/* Search */}
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search bookmarks…"
+            className="rounded-md border border-gray-200 bg-white px-3 py-1 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-56"
+          />
 
           {/* Sort dropdown */}
           <select
@@ -206,7 +234,9 @@ export default function App() {
       {/* Grid */}
       <main className="mx-auto max-w-7xl p-6">
         {filtered.length === 0 ? (
-          <p className="text-center text-sm text-gray-400 mt-12">No {filter} bookmarks yet.</p>
+          <p className="text-center text-sm text-gray-400 mt-12">
+            {query.trim() ? `No results for "${query}"` : `No ${filter} bookmarks yet.`}
+          </p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((bookmark) => (

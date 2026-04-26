@@ -4,6 +4,15 @@ Append-only. Most recent at top. Add entries when features ship.
 
 ---
 
+## 2026-04-26 — Session 8 (planning)
+
+- **plan: approved roadmap for next builds**
+  1. **Search** — Fuse.js full-text search bar in gallery header. Searches across `text`, `authorHandle`, `authorName`, `tags`, `notes`. Real-time, composes with content-type filter and sort dropdown.
+  2. **Tagging** — free-form user-defined tags (e.g. "typography inspo", "really helpful"). Chip input on card detail panel. Write-back via new `UPDATE_BOOKMARK_TAGS` message type (gallery → background → Dexie `update()`). Tags filterable in gallery header. No predefined list — fully user-invented.
+  3. **Export/import `.bookmarkgarden`** — future milestone. Export serialises all bookmarks + tags to a file with that extension. Import reads the file and merges into local DB as a named Collection.
+
+---
+
 ## 2026-04-26 — Session 7
 
 - **feat: sort by date** — gallery header now has a sort dropdown: Newest first / Oldest first / Recently indexed. Sorting is applied in render so switching is instant with no reload.
