@@ -4,6 +4,12 @@ Append-only. Most recent at top. Add entries when features ship.
 
 ---
 
+## 2026-04-26 — Session 6
+
+- **feat: stop/cancel indexing** — popup shows a red "Stop indexing" button whenever a scan is in progress, replacing the normal index buttons. Clicking it sends `STOP_INDEXING` through the message bus (popup → background → content). Content script checks the flag after each scroll step, flushes any pending tweets, then exits cleanly. Overlay shows "Stopped — N bookmarks saved ✓". Everything saved before the stop is preserved.
+
+---
+
 ## 2026-04-26 — Session 5
 
 - **feat: resumable indexing** — popup now shows "Index new bookmarks" (resume mode) after first run, plus a "Reindex all" button for full re-scans. Background tracks `lastIndexedTweetId` in `chrome.storage.local` as the high-water mark (Snowflake ID BigInt comparison). Content script filters tweets by ID and stops after 2 consecutive empty scrolls once past the resume point (vs 4 for full scans). "Already up to date" message shown when nothing new is found.

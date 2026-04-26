@@ -8,8 +8,6 @@ Append-only. Add new items to the appropriate section. Move items to CHANGELOG.m
 
 Items to build in the next 1–2 sessions, in order.
 
-- **Stop / pause indexing** — popup "Stop" button that cancels an in-progress scan mid-run. Currently the scroll loop keeps going with no way to abort it. Background sends `STOP_INDEXING` to content script (message type already defined in `messaging.ts`); content script checks a flag each loop iteration and flushes remaining pending tweets before exiting cleanly.
-
 - **Indexing progress visible everywhere** — popup shows live indexing status even when the x.com tab is in the background. Badge on the extension icon shows running count. State persisted in `chrome.storage.local` so it survives tab switches.
 
 - **Sort & filter by date** — gallery sort dropdown: Newest first / Oldest first / Recently indexed. Date range filter (sidebar or inline). `bookmarkedAt` and `indexedAt` are both indexed so these queries are cheap.

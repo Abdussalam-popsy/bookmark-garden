@@ -31,6 +31,10 @@ export default function Popup() {
     });
   }
 
+  async function handleStop() {
+    await chrome.runtime.sendMessage({ type: "STOP_INDEXING" }).catch(() => {});
+  }
+
   async function handleIndex(mode: "resume" | "full") {
     setIndexStatus({ kind: "loading" });
     const resumeAfterTweetId = mode === "resume" ? (lastIndexedTweetId ?? null) : null;
@@ -76,19 +80,25 @@ export default function Popup() {
       </header>
 
       <div className="flex flex-col gap-2">
-        {hasIndexed ? (
+        {isLoading ? (
+          <button
+            onClick={handleStop}
+            className="w-full rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          >
+            Stop indexing
+          </button>
+        ) : hasIndexed ? (
           <>
             <button
               onClick={() => handleIndex("resume")}
-              disabled={isLoading}
+              disabled={lastIndexedTweetId === undefined}
               className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? "Scanning…" : "Index new bookmarks"}
+              Index new bookmarks
             </button>
             <button
               onClick={() => handleIndex("full")}
-              disabled={isLoading}
-              className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
             >
               Reindex all
             </button>
@@ -96,10 +106,10 @@ export default function Popup() {
         ) : (
           <button
             onClick={() => handleIndex("full")}
-            disabled={isLoading || lastIndexedTweetId === undefined}
+            disabled={lastIndexedTweetId === undefined}
             className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? "Scanning…" : "Index bookmarks"}
+            Index bookmarks
           </button>
         )}
 

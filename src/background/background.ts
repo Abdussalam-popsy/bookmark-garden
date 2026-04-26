@@ -37,7 +37,21 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
       .catch((err: unknown) => sendResponse({ error: String(err) }));
     return true;
   }
+
+  if (message.type === "STOP_INDEXING") {
+    forwardStopToBookmarksTab()
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: true }));
+    return true;
+  }
 });
+
+async function forwardStopToBookmarksTab(): Promise<void> {
+  const tabs = await chrome.tabs.query({ url: "https://x.com/i/bookmarks*" });
+  if (tabs[0]?.id) {
+    await chrome.tabs.sendMessage(tabs[0].id, { type: "STOP_INDEXING" }).catch(() => {});
+  }
+}
 
 async function routeToBookmarksTab(
   message: ExtensionMessage

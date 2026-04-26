@@ -7,6 +7,7 @@
  *   3. Flushes to IndexedDB every FLUSH_BATCH_SIZE tweets so progress is
  *      preserved even if the tab is closed mid-run
  *   4. Stops after MAX_EMPTY_SCROLLS consecutive scrolls with no new tweets
+ *      OR immediately when STOP_INDEXING is received from the popup/background
  */
 
 import { isDev } from "@/lib/env";
@@ -25,13 +26,22 @@ const MAX_EMPTY_SCROLLS_FULL = 4;
 const MAX_EMPTY_SCROLLS_RESUME = 2;
 const FLUSH_BATCH_SIZE = 25; // write to DB after every N new tweets
 
+/** Set to true when STOP_INDEXING is received; checked between scroll steps */
+let stopRequested = false;
+
 chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
   if (message.type === "START_INDEXING") {
+    stopRequested = false;
     const { resumeAfterTweetId } = message.payload;
     runIndexing(resumeAfterTweetId)
       .then((count) => sendResponse({ count }))
       .catch((err: unknown) => sendResponse({ error: String(err) }));
     return true;
+  }
+
+  if (message.type === "STOP_INDEXING") {
+    stopRequested = true;
+    sendResponse({ ok: true });
   }
 });
 
@@ -97,12 +107,18 @@ async function runIndexing(resumeAfterTweetId: string | null): Promise<number> {
 
     window.scrollBy(0, window.innerHeight);
     await sleep(SCROLL_DELAY_MS);
+
+    if (stopRequested) break;
   }
 
-  // Flush any remainder
+  // Flush whatever was collected before the stop/natural end
   await flush();
 
-  overlay.done(totalNew);
+  if (stopRequested) {
+    overlay.stopped(totalNew);
+  } else {
+    overlay.done(totalNew);
+  }
   return totalNew;
 }
 
@@ -120,6 +136,7 @@ interface Overlay {
   update: (count: number, position: string) => void;
   setSaved: (saved: number) => void;
   done: (total: number) => void;
+  stopped: (total: number) => void;
   error: (msg: string) => void;
 }
 
@@ -180,6 +197,13 @@ function createOverlay(): Overlay {
       render(
         `<b>Bookmark Garden</b><br>` +
           `Done — <b>${total}</b> bookmark${total !== 1 ? "s" : ""} saved ✓`
+      );
+      setTimeout(() => el.remove(), 5000);
+    },
+    stopped(total) {
+      render(
+        `<b>Bookmark Garden</b><br>` +
+          `Stopped — <b>${total}</b> bookmark${total !== 1 ? "s" : ""} saved ✓`
       );
       setTimeout(() => el.remove(), 5000);
     },
