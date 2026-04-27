@@ -15,6 +15,7 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.24",
     "dexie": "^4.4.2",
     "fuse.js": "^7.3.0",
     "react": "^19.2.5",

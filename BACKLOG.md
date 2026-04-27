@@ -33,6 +33,12 @@ Items to build in the next 1–2 sessions, in order.
 
 ## Soon
 
+### Housekeeping (batch these in one session)
+
+- **Delete individual bookmarks** — remove a single bookmark from the index permanently. Needs confirmation prompt. Add to card modal or card context menu.
+- **Delete collections** — remove a named collection entirely. Bookmarks inside revert to uncollected (do not delete the bookmarks themselves). Needs confirmation prompt.
+- **Export naming** — when exporting a collection, prompt for a custom filename. Default to `[collection-name]-[YYYY-MM-DD]` rather than a timestamp. Extension stays `.bookmarkgarden`.
+
 - **Content-aware masonry layout** — two card variants based on content: (1) image/video-first: media dominates, text below; (2) text-only: full-width card, larger text, no empty image placeholder. Removes wasted whitespace and makes the gallery feel like a workshop, not a feed. Toggle between masonry and current uniform grid.
 
 - **In-card article preview** — surface `externalLink.description` on article cards so users can read a preview without clicking through. Field is already in the `ExternalLink` schema, just not displayed. Scraper needs to populate it more reliably (currently left empty — OG fetch phase).

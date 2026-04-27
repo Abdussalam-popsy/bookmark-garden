@@ -4,6 +4,12 @@ Append-only. Most recent at top. Add entries when features ship.
 
 ---
 
+## 2026-04-27 — Session 12
+
+- **perf: virtual scrolling** — gallery no longer renders all cards on load. Added `@tanstack/react-virtual` with `useWindowVirtualizer`. Items are chunked into rows, only viewport-visible rows are mounted in the DOM. Column count (1/2/3/4) is derived from container width via `ResizeObserver`, mirroring the existing Tailwind `sm/lg/xl` breakpoints. Row heights are measured dynamically after render; `estimateSize` is set to 400px (a deliberate over-estimate) so scroll position corrects upward rather than jumping as real heights land. All filters — search, content type, tags, collections, date range, sort — compose identically; they reduce the item list before the virtualiser sees it.
+
+---
+
 ## 2026-04-26 — Session 11
 
 - **feat: date range filter** — year dropdown in gallery header, dynamically populated from the years present in the bookmark index (no hardcoded values). Selecting a year reveals a month picker filtered to only months that have bookmarks in that year. An × button clears both. Date filter composes with search, content-type, tag, and collection filters — nothing resets when a date is selected.

@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import Fuse from "fuse.js";
 import type { Bookmark, ContentType } from "@/lib/db";
 
@@ -495,15 +496,7 @@ export default function App() {
             {query.trim() ? `No results for "${query}"` : `No ${filter} bookmarks yet.`}
           </p>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filtered.map((bookmark) => (
-              <BookmarkCard
-                key={bookmark.id}
-                bookmark={bookmark}
-                onTagClick={() => setActiveCard(bookmark)}
-              />
-            ))}
-          </div>
+          <VirtualGrid items={filtered} onTagClick={(bookmark) => setActiveCard(bookmark)} />
         )}
       </main>
 
@@ -527,6 +520,110 @@ export default function App() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ── VirtualGrid ───────────────────────────────────────────────────────────────
+
+/** Derive column count from the container's rendered pixel width, mirroring
+ *  the Tailwind breakpoints used for the grid: sm=2, lg=3, xl=4. */
+function getColumnCount(width: number): number {
+  if (width >= 1280) return 4;
+  if (width >= 1024) return 3;
+  if (width >= 640) return 2;
+  return 1;
+}
+
+function VirtualGrid({
+  items,
+  onTagClick,
+}: {
+  items: Bookmark[];
+  onTagClick: (b: Bookmark) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [cols, setCols] = useState(1);
+
+  // Track container width and update column count
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? el.offsetWidth;
+      setCols(getColumnCount(width));
+    });
+    ro.observe(el);
+    setCols(getColumnCount(el.offsetWidth));
+    return () => ro.disconnect();
+  }, []);
+
+  // Chunk items into rows
+  const rows = useMemo(() => {
+    if (cols === 0) return [];
+    const result: Bookmark[][] = [];
+    for (let i = 0; i < items.length; i += cols) {
+      result.push(items.slice(i, i + cols));
+    }
+    return result;
+  }, [items, cols]);
+
+  const rowVirtualizer = useWindowVirtualizer({
+    count: rows.length,
+    // Over-estimate: cards with images are ~220px tall + body; 400px prevents
+    // scroll-position jumps before real heights are measured.
+    estimateSize: () => 400,
+    overscan: 3,
+    scrollMargin: containerRef.current?.offsetTop ?? 0,
+  });
+
+  const measureRef = useCallback(
+    (el: HTMLElement | null) => {
+      if (el) rowVirtualizer.measureElement(el);
+    },
+    [rowVirtualizer]
+  );
+
+  return (
+    <div ref={containerRef}>
+      <div
+        style={{
+          height: `${rowVirtualizer.getTotalSize()}px`,
+          position: "relative",
+        }}
+      >
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const rowItems = rows[virtualRow.index];
+          return (
+            <div
+              key={virtualRow.key}
+              data-index={virtualRow.index}
+              ref={measureRef}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${virtualRow.start - rowVirtualizer.options.scrollMargin}px)`,
+                paddingBottom: "1rem", // matches gap-4
+              }}
+            >
+              <div
+                className="grid gap-4"
+                style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+              >
+                {rowItems.map((bookmark) => (
+                  <BookmarkCard
+                    key={bookmark.id}
+                    bookmark={bookmark}
+                    onTagClick={() => onTagClick(bookmark)}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
