@@ -56,7 +56,7 @@ const CONTENT_TYPES: Array<ContentType | "all"> = [
   "all",
   "article",
   "video",
-  "design",
+  "image",
   "thread",
   "code",
   "note",
@@ -65,7 +65,7 @@ const CONTENT_TYPES: Array<ContentType | "all"> = [
 const TYPE_COLOURS: Record<ContentType, string> = {
   article: "bg-blue-100 text-blue-700",
   video: "bg-red-100 text-red-700",
-  design: "bg-purple-100 text-purple-700",
+  image: "bg-purple-100 text-purple-700",
   thread: "bg-amber-100 text-amber-700",
   code: "bg-emerald-100 text-emerald-700",
   note: "bg-gray-100 text-gray-600",
@@ -116,11 +116,11 @@ export default function App() {
   const [filter, setFilter] = useState<ContentType | "all">("all");
   const [sort, setSort] = useState<SortKey>("newest");
   const [query, setQuery] = useState("");
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [collectionFilter, setCollectionFilter] = useState<string | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
-  const [activeCard, setActiveCard] = useState<Bookmark | null>(null);
+  const [singleCollectionTarget, setSingleCollectionTarget] = useState<Bookmark | null>(null);
+  const [contentTypeEditTarget, setContentTypeEditTarget] = useState<Bookmark | null>(null);
   const [importPending, setImportPending] = useState<ImportPending | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -139,6 +139,16 @@ export default function App() {
     setLoading(true);
     setError(null);
     readAllBookmarks()
+      .then(async (data) => {
+        const needsMigration = data.some(
+          (b) => (b.tags?.length ?? 0) > 0 || (b.contentType as string) === "design"
+        );
+        if (needsMigration) {
+          await chrome.runtime.sendMessage({ type: "RUN_MIGRATIONS" });
+          return readAllBookmarks();
+        }
+        return data;
+      })
       .then((data) => {
         setBookmarks(data);
         setLoading(false);
@@ -164,9 +174,33 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectionMode]);
 
-  function applyTagUpdate(id: string, tags: string[]) {
-    setBookmarks((prev) => prev.map((b) => (b.id === id ? { ...b, tags } : b)));
-    setActiveCard((prev) => (prev?.id === id ? { ...prev, tags } : prev));
+  async function handleAddCollectionToBookmark(bookmarkId: string, collection: string) {
+    const bm = bookmarks.find((b) => b.id === bookmarkId)!;
+    const existing = bm.collections ?? [];
+    if (existing.includes(collection)) {
+      setSingleCollectionTarget(null);
+      return;
+    }
+    const newCollections = [...existing, collection];
+    const res = (await chrome.runtime.sendMessage({
+      type: "BATCH_UPDATE_COLLECTIONS",
+      payload: { updates: [{ id: bookmarkId, collections: newCollections }] },
+    })) as { ok?: boolean; error?: string } | undefined;
+    if (res?.error) throw new Error(res.error);
+    setBookmarks((prev) =>
+      prev.map((b) => (b.id === bookmarkId ? { ...b, collections: newCollections } : b))
+    );
+    setSingleCollectionTarget(null);
+  }
+
+  async function handleContentTypeUpdate(id: string, contentType: ContentType) {
+    const res = (await chrome.runtime.sendMessage({
+      type: "UPDATE_BOOKMARK_CONTENT_TYPE",
+      payload: { id, contentType },
+    })) as { ok?: boolean; error?: string } | undefined;
+    if (res?.error) throw new Error(res.error);
+    setBookmarks((prev) => prev.map((b) => (b.id === id ? { ...b, contentType } : b)));
+    setContentTypeEditTarget(null);
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -197,12 +231,6 @@ export default function App() {
     setTimeout(() => setImportSuccess(null), 6000);
   }
 
-  const allTags = useMemo(() => {
-    const set = new Set<string>();
-    bookmarks.forEach((b) => b.tags.forEach((t) => set.add(t)));
-    return [...set].sort();
-  }, [bookmarks]);
-
   const allCollections = useMemo(() => {
     const set = new Set<string>();
     bookmarks.forEach((b) => b.collections?.forEach((c) => set.add(c)));
@@ -230,7 +258,7 @@ export default function App() {
   const fuse = useMemo(
     () =>
       new Fuse(sorted, {
-        keys: ["text", "authorHandle", "authorName", "tags", "notes"],
+        keys: ["text", "authorHandle", "authorName", "notes"],
         threshold: 0.35,
         ignoreLocation: true,
       }),
@@ -238,10 +266,9 @@ export default function App() {
   );
 
   const searched = query.trim() ? fuse.search(query).map((r) => r.item) : sorted;
-  const tagFiltered = tagFilter ? searched.filter((b) => b.tags.includes(tagFilter)) : searched;
   const collectionFiltered = collectionFilter
-    ? tagFiltered.filter((b) => b.collections?.includes(collectionFilter))
-    : tagFiltered;
+    ? searched.filter((b) => b.collections?.includes(collectionFilter))
+    : searched;
   const dateFiltered =
     filterYear !== null
       ? collectionFiltered.filter((b) => {
@@ -312,6 +339,7 @@ export default function App() {
       })
     );
     setShowAddToCollectionModal(false);
+    exitSelectionMode();
   }
 
   async function handleDeleteCollectionConfirmed(collection: string) {
@@ -510,7 +538,12 @@ export default function App() {
               {selectionMode ? "Cancel" : "Select"}
             </button>
             <button
-              onClick={() => exportBookmarks(bookmarks)}
+              onClick={() =>
+                setExportModalPending({
+                  defaultName: `bookmark-garden-${new Date().toISOString().slice(0, 10)}`,
+                  items: bookmarks,
+                })
+              }
               className="rounded-md border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
             >
               Export
@@ -531,7 +564,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Row 2: content-type filter + tag filter */}
+        {/* Row 2: content-type filter */}
         <div className="mx-auto max-w-7xl flex flex-wrap gap-1">
           {CONTENT_TYPES.map((type) => {
             const count =
@@ -553,25 +586,6 @@ export default function App() {
               </button>
             );
           })}
-
-          {allTags.length > 0 && (
-            <>
-              <span className="self-center text-gray-300 text-xs mx-1">|</span>
-              {allTags.map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    tagFilter === tag
-                      ? "bg-violet-600 text-white"
-                      : "bg-violet-50 text-violet-700 hover:bg-violet-100"
-                  }`}
-                >
-                  #{tag}
-                </button>
-              ))}
-            </>
-          )}
         </div>
 
         {/* Row 3: collections filter — only shown when imported collections exist */}
@@ -625,18 +639,63 @@ export default function App() {
                   </button>
                   <button
                     onClick={() => setDeleteCollectionTarget(col)}
-                    className={`px-1.5 py-1 border-l text-xs transition-colors ${
+                    className={`px-1.5 py-1 border-l transition-colors flex items-center ${
                       isActive
                         ? "border-sky-400 text-sky-100 hover:text-white hover:bg-sky-700"
                         : "border-sky-200 text-sky-400 hover:text-red-500 hover:bg-red-50"
                     }`}
                     title={`Delete "${col}"`}
                   >
-                    ×
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                    </svg>
                   </button>
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Row 4: collection context bar — shown when a collection is the active filter */}
+        {collectionFilter && (
+          <div className="mx-auto max-w-7xl flex items-center gap-3 pt-2 border-t border-sky-100">
+            <span className="text-sm font-semibold text-sky-800">{collectionFilter}</span>
+            <span className="text-xs text-sky-500">
+              {bookmarks.filter((b) => (b.collections ?? []).includes(collectionFilter)).length}{" "}
+              bookmarks
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() =>
+                  setExportModalPending({
+                    defaultName: `${collectionFilter}-${new Date().toISOString().slice(0, 10)}`,
+                    items: bookmarks.filter((b) =>
+                      (b.collections ?? []).includes(collectionFilter)
+                    ),
+                  })
+                }
+                className="rounded-md border border-sky-200 bg-sky-50 px-3 py-1 text-xs text-sky-700 hover:bg-sky-100 transition-colors"
+              >
+                Export
+              </button>
+              <button
+                onClick={() => setDeleteCollectionTarget(collectionFilter)}
+                className="rounded-md border border-red-200 bg-white px-3 py-1 text-xs text-red-600 hover:bg-red-50 transition-colors"
+              >
+                Delete collection
+              </button>
+            </div>
           </div>
         )}
       </header>
@@ -650,7 +709,8 @@ export default function App() {
         ) : (
           <VirtualGrid
             items={filtered}
-            onTagClick={(bookmark) => setActiveCard(bookmark)}
+            onAddCollection={(bookmark) => setSingleCollectionTarget(bookmark)}
+            onEditContentType={(bookmark) => setContentTypeEditTarget(bookmark)}
             selectionMode={selectionMode}
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
@@ -658,12 +718,26 @@ export default function App() {
         )}
       </main>
 
-      {/* Tag modal */}
-      {activeCard && (
-        <TagModal
-          bookmark={activeCard}
-          onClose={() => setActiveCard(null)}
-          onSave={(tags) => applyTagUpdate(activeCard.id, tags)}
+      {/* Single-bookmark add to collection modal */}
+      {singleCollectionTarget && (
+        <AddToCollectionModal
+          count={1}
+          existingCollections={allCollections}
+          onClose={() => setSingleCollectionTarget(null)}
+          onConfirm={(collection) =>
+            handleAddCollectionToBookmark(singleCollectionTarget.id, collection)
+          }
+        />
+      )}
+
+      {/* Content type picker modal */}
+      {contentTypeEditTarget && (
+        <ContentTypePickerModal
+          bookmark={contentTypeEditTarget}
+          onClose={() => setContentTypeEditTarget(null)}
+          onConfirm={(contentType) =>
+            handleContentTypeUpdate(contentTypeEditTarget.id, contentType)
+          }
         />
       )}
 
@@ -754,13 +828,15 @@ function getColumnCount(width: number): number {
 
 function VirtualGrid({
   items,
-  onTagClick,
+  onAddCollection,
+  onEditContentType,
   selectionMode,
   selectedIds,
   onToggleSelect,
 }: {
   items: Bookmark[];
-  onTagClick: (b: Bookmark) => void;
+  onAddCollection: (b: Bookmark) => void;
+  onEditContentType: (b: Bookmark) => void;
   selectionMode: boolean;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
@@ -839,7 +915,8 @@ function VirtualGrid({
                   <BookmarkCard
                     key={bookmark.id}
                     bookmark={bookmark}
-                    onTagClick={() => onTagClick(bookmark)}
+                    onAddCollection={() => onAddCollection(bookmark)}
+                    onEditContentType={() => onEditContentType(bookmark)}
                     selectionMode={selectionMode}
                     isSelected={selectedIds.has(bookmark.id)}
                     onToggleSelect={() => onToggleSelect(bookmark.id)}
@@ -858,13 +935,15 @@ function VirtualGrid({
 
 function BookmarkCard({
   bookmark,
-  onTagClick,
+  onAddCollection,
+  onEditContentType,
   selectionMode,
   isSelected,
   onToggleSelect,
 }: {
   bookmark: Bookmark;
-  onTagClick: () => void;
+  onAddCollection: () => void;
+  onEditContentType: () => void;
   selectionMode: boolean;
   isSelected: boolean;
   onToggleSelect: () => void;
@@ -974,7 +1053,7 @@ function BookmarkCard({
               </p>
               <p className="truncate text-xs text-gray-400">@{authorHandle}</p>
             </div>
-            <TypeBadge type={contentType} />
+            <TypeBadge type={contentType} onClick={onEditContentType} />
           </div>
 
           {/* Tweet text — larger and less clamped when text is the only visual */}
@@ -1021,21 +1100,7 @@ function BookmarkCard({
             <p className="text-xs text-blue-600 truncate">{externalLink.title}</p>
           )}
 
-          {/* Existing tags */}
-          {bookmark.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {bookmark.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full bg-violet-50 text-violet-700 px-2 py-0.5 text-[10px] font-medium"
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Footer: date + tag button */}
+          {/* Footer: date + add-to-collection button */}
           <div className="mt-auto pt-1 flex items-center justify-between">
             <p className="text-xs text-gray-400">
               {new Date(bookmark.bookmarkedAt).toLocaleDateString("en-US", {
@@ -1048,12 +1113,12 @@ function BookmarkCard({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onTagClick();
+                onAddCollection();
               }}
-              className="text-xs text-gray-400 hover:text-violet-600 transition-colors px-1"
-              title="Add / edit tags"
+              className="text-xs text-gray-400 hover:text-sky-600 transition-colors px-1"
+              title="Add to collection"
             >
-              {bookmark.tags.length > 0 ? `#${bookmark.tags.length}` : "+ tag"}
+              + collection
             </button>
           </div>
         </div>
@@ -1157,162 +1222,17 @@ function ImportModal({
   );
 }
 
-// ── TagModal ──────────────────────────────────────────────────────────────────
-
-function TagModal({
-  bookmark,
-  onClose,
-  onSave,
-}: {
-  bookmark: Bookmark;
-  onClose: () => void;
-  onSave: (tags: string[]) => void;
-}) {
-  const [tags, setTags] = useState<string[]>(bookmark.tags);
-  const [input, setInput] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  function commitInput() {
-    const t = input.trim();
-    if (t && !tags.includes(t)) setTags((prev) => [...prev, t]);
-    setInput("");
-  }
-
-  function removeTag(tag: string) {
-    setTags((prev) => prev.filter((t) => t !== tag));
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const res = (await chrome.runtime.sendMessage({
-        type: "UPDATE_BOOKMARK_TAGS",
-        payload: { id: bookmark.id, tags },
-      })) as { ok?: boolean; error?: string } | undefined;
-      if (res?.error) throw new Error(res.error);
-      onSave(tags);
-      onClose();
-    } catch (err) {
-      setSaveError(String(err));
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Author */}
-        <div className="flex items-center gap-2">
-          {bookmark.authorAvatar ? (
-            <img
-              src={bookmark.authorAvatar}
-              alt={bookmark.authorName}
-              className="h-9 w-9 rounded-full object-cover"
-            />
-          ) : (
-            <div className="h-9 w-9 rounded-full bg-gray-200" />
-          )}
-          <div>
-            <p className="text-sm font-semibold text-gray-900">{bookmark.authorName}</p>
-            <p className="text-xs text-gray-400">@{bookmark.authorHandle}</p>
-          </div>
-        </div>
-
-        {/* Tweet text preview */}
-        {bookmark.text && (
-          <p className="text-sm text-gray-700 line-clamp-4 leading-snug">{bookmark.text}</p>
-        )}
-
-        {/* Tag chips */}
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-2">Tags</p>
-          <div className="flex flex-wrap gap-1 min-h-6">
-            {tags.map((tag) => (
-              <span
-                key={tag}
-                className="flex items-center gap-1 rounded-full bg-violet-100 text-violet-700 px-2.5 py-0.5 text-xs font-medium"
-              >
-                #{tag}
-                <button
-                  onClick={() => removeTag(tag)}
-                  className="hover:text-red-500 leading-none"
-                  aria-label={`Remove ${tag}`}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Tag input */}
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === ",") {
-              e.preventDefault();
-              commitInput();
-            }
-            if (e.key === "Backspace" && !input) setTags((prev) => prev.slice(0, -1));
-          }}
-          onBlur={commitInput}
-          placeholder="Type a tag and press Enter…"
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-        />
-
-        {saveError && <p className="text-xs text-red-600">{saveError}</p>}
-
-        {/* Actions */}
-        <div className="flex items-center justify-between pt-1">
-          <a
-            href={`https://x.com/${bookmark.authorHandle}/status/${bookmark.id}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-gray-400 hover:text-gray-600"
-          >
-            View on X ↗
-          </a>
-          <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-            >
-              {saving ? "Saving…" : "Save tags"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TypeBadge({ type }: { type: ContentType }) {
+function TypeBadge({ type, onClick }: { type: ContentType; onClick?: () => void }) {
   return (
     <span
-      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${TYPE_COLOURS[type]}`}
+      onClick={(e) => {
+        if (onClick) {
+          e.preventDefault();
+          e.stopPropagation();
+          onClick();
+        }
+      }}
+      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${TYPE_COLOURS[type]} ${onClick ? "cursor-pointer hover:opacity-75" : ""}`}
     >
       {type}
     </span>
@@ -1631,6 +1551,80 @@ function DeleteCollectionModal({
             className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {deleting ? "Deleting…" : "Delete collection"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ContentTypePickerModal ────────────────────────────────────────────────────
+
+const PICKABLE_TYPES: ContentType[] = ["image", "video", "article", "note"];
+
+function ContentTypePickerModal({
+  bookmark,
+  onClose,
+  onConfirm,
+}: {
+  bookmark: Bookmark;
+  onClose: () => void;
+  onConfirm: (contentType: ContentType) => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  async function handlePick(ct: ContentType) {
+    if (ct === bookmark.contentType) {
+      onClose();
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onConfirm(ct);
+    } catch (err) {
+      setSaveError(String(err));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-5 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">Change type</h2>
+          <p className="mt-1 text-xs text-gray-500 truncate">@{bookmark.authorHandle}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {PICKABLE_TYPES.map((ct) => (
+            <button
+              key={ct}
+              onClick={() => handlePick(ct)}
+              disabled={saving}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors border-2 disabled:opacity-50 ${
+                bookmark.contentType === ct
+                  ? `${TYPE_COLOURS[ct]} border-current`
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200 border-transparent"
+              }`}
+            >
+              {ct}
+            </button>
+          ))}
+        </div>
+        {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+        <div className="flex justify-end">
+          <button
+            onClick={onClose}
+            className="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+          >
+            Cancel
           </button>
         </div>
       </div>

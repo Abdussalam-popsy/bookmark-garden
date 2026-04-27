@@ -232,9 +232,9 @@ function classifyContent(
     return "code";
   }
 
-  // 3. 2+ images with no external link → design/graphic post
+  // 3. 2+ images with no external link → image/graphic post
   if (media.filter((m) => m.type === "image").length >= 2 && !externalLink) {
-    return "design";
+    return "image";
   }
 
   // 4. Link card with a title → article

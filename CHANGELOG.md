@@ -4,6 +4,26 @@ Append-only. Most recent at top. Add entries when features ship.
 
 ---
 
+## 2026-04-27 — Session 17
+
+- **feat: collection context bar** — when a collection is the active filter, a new Row 4 appears inside the sticky header: collection name + bookmark count, Export button (opens `ExportNamingModal` for that collection), Delete collection button (opens `DeleteCollectionModal`). Bar disappears when filter is cleared. No new components — fully reuses existing modals.
+- **fix: trash icon on collection pills** — replaced the `×` text on each pill's delete button with an inline SVG trash icon (11×11, Feather-style stroke). Clearer intent; consistent with standard destructive affordances.
+- **fix: universal export naming modal** — the "Export" button in the gallery header Row 1 previously called `downloadAsBookmarkgarden` directly, bypassing the filename prompt. Now routes through `setExportModalPending` like every other export path. All four export entry points (full library, collection pill ↓, collection context bar, export selected) now always show `ExportNamingModal` before downloading.
+
+---
+
+## 2026-04-27 — Session 16
+
+- **refactor: tags → collections migration** — free-form tags are retired as a UI concept. On gallery load, any bookmark with non-empty `tags[]` automatically has its tags merged into `collections[]` and `tags[]` cleared. Migration runs via a new `RUN_MIGRATIONS` background message using a single Dexie transaction. Idempotent — subsequent loads skip it.
+- **refactor: "design" → "image" content type** — `ContentType` union updated (`"design"` → `"image"`). Scraper rule 3 now returns `"image"` for multi-image posts. `RUN_MIGRATIONS` also updates any existing `contentType === "design"` records to `"image"` in Dexie. Gallery filter pills and colour map updated.
+- **feat: remove tag UI** — `+ tag` button on cards removed. Tag filter pills removed from gallery header Row 2. `TagModal` component removed. `allTags` useMemo, `tagFilter` state, and `tagFiltered` pipeline step all removed. Fuse.js search keys updated (removed `"tags"`).
+- **feat: + collection on cards** — each card now has a `+ collection` button in the footer (where `+ tag` was). Tapping it opens the existing `AddToCollectionModal` for that single bookmark. Reuses `BATCH_UPDATE_COLLECTIONS` message — no new message type needed.
+- **feat: editable content type badge** — clicking the type badge on any card opens a new `ContentTypePickerModal` with Image / Video / Article / Note pills. Selecting a type sends `UPDATE_BOOKMARK_CONTENT_TYPE` to background, updates the card live. Badge highlights the current type with a border.
+- **fix: post-add deselection** — after "Add to collection" confirms from the selection action bar, `exitSelectionMode()` is now called automatically. Previously required a manual Cancel.
+- **new messages**: `UPDATE_BOOKMARK_CONTENT_TYPE` (single bookmark content type update), `RUN_MIGRATIONS` (idempotent data migration).
+
+---
+
 ## 2026-04-27 — Session 15
 
 - **feat: add to collection (from selection)** — "Add to collection" button in the selection action bar. Opens a modal showing existing collections as quick-pick pills; type or click to set the collection name, click "Add to collection" to confirm. Selected bookmarks get the collection appended to their `collections[]` field. Optimistic state update — no reload. Uses new `BATCH_UPDATE_COLLECTIONS` background message.

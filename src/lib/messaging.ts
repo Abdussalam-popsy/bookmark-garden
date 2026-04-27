@@ -78,6 +78,20 @@ export interface BatchUpdateCollectionsMessage {
   payload: { updates: Array<{ id: string; collections: string[] }> };
 }
 
+/** Gallery → Background: update the contentType on a single bookmark */
+export interface UpdateBookmarkContentTypeMessage {
+  type: "UPDATE_BOOKMARK_CONTENT_TYPE";
+  payload: { id: string; contentType: import("./db").ContentType };
+}
+
+/** Gallery → Background: run idempotent one-time migrations.
+ *  Background reads Dexie directly and:
+ *    1. Updates contentType "design" → "image" on all affected records.
+ *    2. Merges tags[] into collections[] and clears tags[] on all affected records. */
+export interface RunMigrationsMessage {
+  type: "RUN_MIGRATIONS";
+}
+
 /** Union of every message that can travel through the extension */
 export type ExtensionMessage =
   | StartIndexingMessage
@@ -88,7 +102,9 @@ export type ExtensionMessage =
   | UpdateBookmarkTagsMessage
   | ImportBookmarksMessage
   | DeleteBookmarksMessage
-  | BatchUpdateCollectionsMessage;
+  | BatchUpdateCollectionsMessage
+  | UpdateBookmarkContentTypeMessage
+  | RunMigrationsMessage;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

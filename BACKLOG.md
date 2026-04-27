@@ -41,6 +41,8 @@ Items to build in the next 1–2 sessions, in order.
 
 - **Content-aware masonry layout** — two card variants based on content: (1) image/video-first: media dominates, text below; (2) text-only: full-width card, larger text, no empty image placeholder. Removes wasted whitespace and makes the gallery feel like a workshop, not a feed. Toggle between masonry and current uniform grid.
 
+- **Notes UI** — `notes` field already exists on every `Bookmark` record in Dexie. Needs: a textarea in a card modal, and write-back via a new `UPDATE_BOOKMARK_NOTES` message (gallery → background → `db.bookmarks.update(id, { notes })`).
+
 - **In-card article preview** — surface `externalLink.description` on article cards so users can read a preview without clicking through. Field is already in the `ExternalLink` schema, just not displayed. Scraper needs to populate it more reliably (currently left empty — OG fetch phase).
 
 - **Per-collection export** — export a single named collection as its own `.bookmarkgarden` file instead of always exporting everything. Enables cleaner sharing: export "Pravin" → send file → collaborator imports it. UI: Export button becomes a dropdown when collections exist.

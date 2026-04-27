@@ -81,6 +81,22 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
       .catch((err: unknown) => sendResponse({ error: String(err) }));
     return true;
   }
+
+  if (message.type === "UPDATE_BOOKMARK_CONTENT_TYPE") {
+    const { id, contentType } = message.payload;
+    db.bookmarks
+      .update(id, { contentType })
+      .then(() => sendResponse({ ok: true }))
+      .catch((err: unknown) => sendResponse({ error: String(err) }));
+    return true;
+  }
+
+  if (message.type === "RUN_MIGRATIONS") {
+    runMigrations()
+      .then(() => sendResponse({ ok: true }))
+      .catch((err: unknown) => sendResponse({ error: String(err) }));
+    return true;
+  }
 });
 
 async function forwardStopToBookmarksTab(): Promise<void> {
@@ -138,6 +154,30 @@ async function importBatch(bookmarks: Bookmark[]): Promise<number> {
   }));
   await db.bookmarks.bulkPut(records);
   return records.length;
+}
+
+/**
+ * One-time idempotent migrations:
+ *   1. Rename contentType "design" → "image" on all affected records.
+ *   2. Merge tags[] into collections[], then clear tags[].
+ * Safe to run multiple times — re-runs are no-ops once data is clean.
+ */
+async function runMigrations(): Promise<void> {
+  await db.transaction("rw", db.bookmarks, async () => {
+    // 1. design → image
+    const designRecords = await db.bookmarks.where("contentType").equals("design").toArray();
+    for (const bm of designRecords) {
+      await db.bookmarks.update(bm.id, { contentType: "image" });
+    }
+
+    // 2. tags → collections
+    const tagged = await db.bookmarks.filter((b) => b.tags.length > 0).toArray();
+    for (const bm of tagged) {
+      const existing = bm.collections ?? [];
+      const merged = [...new Set([...existing, ...bm.tags])];
+      await db.bookmarks.update(bm.id, { collections: merged, tags: [] });
+    }
+  });
 }
 
 async function saveBatch(bookmarks: Bookmark[]): Promise<number> {

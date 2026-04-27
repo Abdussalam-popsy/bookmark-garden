@@ -18,7 +18,7 @@ import Dexie, { type EntityTable } from "dexie";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type ContentType = "article" | "video" | "design" | "thread" | "code" | "note";
+export type ContentType = "article" | "video" | "image" | "thread" | "code" | "note";
 
 export interface MediaItem {
   type: "image" | "video";
