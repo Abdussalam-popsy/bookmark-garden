@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import logo from "../assets/icons/iconalpha.png";
 
 type IndexStatus =
   | { kind: "idle" }
@@ -75,7 +76,7 @@ export default function Popup() {
   return (
     <div className="w-64 p-4 font-sans">
       <header className="mb-4 flex items-center gap-2">
-        <span className="text-2xl">🌿</span>
+        <img src={logo} alt="Bookmark Garden" className="w-6 h-6 " />
         <h1 className="text-base font-semibold text-gray-900">Bookmark Garden</h1>
       </header>
 

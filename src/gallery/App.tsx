@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import logo from "../assets/icons/iconalpha.png";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import Fuse from "fuse.js";
 import type { Bookmark, ContentType } from "@/lib/db";
@@ -392,7 +393,7 @@ export default function App() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
-          <span className="text-5xl">🌿</span>
+          <img src={logo} alt="Bookmark Garden" className="w-12 h-12 " />
           <h1 className="mt-4 text-xl font-semibold text-gray-900">No bookmarks yet</h1>
           <p className="mt-2 text-sm text-gray-500">
             Go to x.com/i/bookmarks and click <b>Index bookmarks</b> in the popup.
@@ -443,7 +444,7 @@ export default function App() {
         {/* Row 1: title + search + sort + export/import */}
         <div className="mx-auto max-w-7xl flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🌿</span>
+            <img src={logo} alt="Bookmark Garden" className="w-5 h-5 " />
             <h1 className="font-semibold text-gray-900">Bookmark Garden</h1>
             <span className="text-xs text-gray-400 ml-1">
               {filtered.length === bookmarks.length
