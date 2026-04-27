@@ -60,6 +60,27 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
       .catch((err: unknown) => sendResponse({ error: String(err) }));
     return true;
   }
+
+  if (message.type === "DELETE_BOOKMARKS") {
+    const { ids } = message.payload;
+    db.bookmarks
+      .bulkDelete(ids)
+      .then(() => sendResponse({ ok: true }))
+      .catch((err: unknown) => sendResponse({ error: String(err) }));
+    return true;
+  }
+
+  if (message.type === "BATCH_UPDATE_COLLECTIONS") {
+    const { updates } = message.payload;
+    db.transaction("rw", db.bookmarks, async () => {
+      for (const { id, collections } of updates) {
+        await db.bookmarks.update(id, { collections });
+      }
+    })
+      .then(() => sendResponse({ ok: true }))
+      .catch((err: unknown) => sendResponse({ error: String(err) }));
+    return true;
+  }
 });
 
 async function forwardStopToBookmarksTab(): Promise<void> {

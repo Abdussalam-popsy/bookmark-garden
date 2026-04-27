@@ -4,6 +4,24 @@ Append-only. Most recent at top. Add entries when features ship.
 
 ---
 
+## 2026-04-27 — Session 15
+
+- **feat: add to collection (from selection)** — "Add to collection" button in the selection action bar. Opens a modal showing existing collections as quick-pick pills; type or click to set the collection name, click "Add to collection" to confirm. Selected bookmarks get the collection appended to their `collections[]` field. Optimistic state update — no reload. Uses new `BATCH_UPDATE_COLLECTIONS` background message.
+- **feat: export selected** — "Export selected" button in the selection action bar. Opens a naming modal (default: `selection-YYYY-MM-DD`). User edits the filename, clicks Export — downloads only the selected bookmarks as a `.bookmarkgarden` file.
+- **feat: per-collection export** — Each collection pill in the header now has a `↓` icon button. Clicking it opens the same export naming modal (default: `[collection-name]-YYYY-MM-DD`) and downloads only bookmarks in that collection.
+- **feat: delete collection** — Each collection pill now has a `×` icon button. Clicking it opens a confirm modal showing how many bookmarks will be affected. On confirm: removes the collection label from all affected bookmarks (bookmarks stay in the library); if the deleted collection was the active filter it is cleared. Uses `BATCH_UPDATE_COLLECTIONS` message.
+- **refactor: `downloadAsBookmarkgarden`** — extracted from `exportBookmarks` as a reusable helper. `exportBookmarks` now delegates to it. `ExportNamingModal` and per-collection export use it directly.
+- **refactor: collection pills → compound pills** — each collection pill in the header is now a bordered group (name | ↓ | ×) matching the active/inactive colour scheme. Filter-click, export, and delete are independent hit targets.
+- **refactor: `SelectionActionBar` extended** — two new props `onAddToCollection` and `onExportSelected`. Button order: Add to collection | Export selected | Delete N | Cancel.
+
+---
+
+## 2026-04-27 — Session 14
+
+- **feat: multi-select + delete** — gallery supports selecting individual bookmarks and bulk-deleting them. Two entry points into selection mode: (1) hover a card → checkbox appears top-left; click it to select and enter selection mode. (2) "Select" button in the gallery header top-right. While in selection mode all cards show checkboxes. Exiting: click "Cancel" (header button toggles label), press Escape, or use the Cancel button in the action bar. Selected cards show an emerald ring highlight. Action bar fixed to the bottom of the screen when selection mode is active; shows count, Select all / Deselect all toggle, Delete button (disabled at 0 selected), Cancel. "Select all" selects the full currently-filtered set, not just visible cards. Clicking Delete opens a confirmation modal: heading shows the count, body warns it's permanent, a text input requires typing `bookmark.garden` exactly before the Delete button enables. On confirm: sends `DELETE_BOOKMARKS` message to background service worker which calls `db.bookmarks.bulkDelete(ids)`, gallery removes deleted items from local state optimistically, selection mode exits. New `DeleteBookmarksMessage` type added to `messaging.ts`; handler added to `background.ts`. Action bar is built as `SelectionActionBar` component designed for future expansion (Session B will add "Add to collection" and "Export selected").
+
+---
+
 ## 2026-04-27 — Session 13
 
 - **design: per-content-type card treatments** — removed the dead zone that appeared on short cards in rows with taller neighbours. Root fix: `items-start` on the virtual grid row so cells don't stretch to row height. Four distinct visual treatments: (1) **Text-only** (note, thread, code — any card without a hero image): body text increased to 15px, line clamp raised to 5 lines so text has presence as the sole visual element. (2) **Image/video/design**: unchanged — hero image fills top, text below. (3) **Article**: always shows a tinted link preview block (favicon + site name + headline in a `bg-gray-50` rounded container) regardless of whether a hero image is also present — makes article cards consistently identifiable. (4) **Non-article links**: retain existing small blue title treatment. Favicon loaded via Google S2 service with `onError` hide fallback. No changes to virtualisation, filters, or search.

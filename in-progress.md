@@ -33,6 +33,54 @@ Resumable indexing is shipped. Test it: remove+reload extension, open x.com/i/bo
 
 ---
 
+---
+
+## Update — 2026-04-27 (sessions 5–13)
+
+A lot has shipped since session 4. Capturing it here as a block rather than per-session — CHANGELOG.md has the full per-session detail.
+
+### What's been built
+
+**Indexing**
+- Resumable indexing — first run does a full scan, subsequent runs index only new bookmarks since the last indexed tweet ID. Popup shows "Index new bookmarks" vs "Reindex all" depending on state.
+
+**Gallery — filtering and search**
+- Fuse.js full-text search bar (searches text, author, tags, notes)
+- Sort dropdown: newest first / oldest first / recently indexed
+- Content-type filter pills (all, article, video, design, thread, code, note) with live counts
+- Free-form tag filter — violet pills in header, click to filter
+- Collections filter row — sky-blue pills, only shown when imported collections exist
+- Date range filter — year dropdown (populated from actual data), month picker appears after year selection, × to clear
+
+**Gallery — data management**
+- Export all bookmarks as `.bookmarkgarden` (JSON)
+- Import `.bookmarkgarden` — modal prompts for collection name, bookmarks tagged with that collection, writes to Dexie via background message
+
+**Gallery — card UX**
+- Free-form tagging — "+ tag" button on each card opens a modal, chip input, saves via `UPDATE_BOOKMARK_TAGS` message, optimistic update (no reload)
+- Per-content-type card treatments: article cards show a tinted link preview block (favicon + site name + headline); text-only cards (note, thread, code) show body text at 15px / 5-line clamp; image/video/design cards unchanged
+
+**Scraper fix**
+- X native article cards now scraped correctly — `extractText` checks for `[data-testid="twitter-article-title"]` first; `classifyContent` detects article card via `[data-testid="twitterArticleReadView"]`
+
+**Performance**
+- Virtual scrolling via `@tanstack/react-virtual` (`useWindowVirtualizer`) — only viewport-visible rows rendered. Column count derived from container width via ResizeObserver. `estimateSize: 400px` (deliberate over-estimate to prevent scroll jump). All filters compose before the virtualiser sees the list.
+- Cards fixed at `h-[340px]` with `overflow-hidden` — uniform grid, no dead zones, content truncates to fit
+
+### Current state (as of session 13)
+
+Gallery is fast and usable at ~10k bookmarks. All filters compose correctly. Two pre-launch items checked off: virtual scrolling and content-aware layout. Remaining pre-launch gates: per-collection export, indexing reliability at scale (1000+ run), landing page, Store submission.
+
+### Lessons learned
+
+- **Dexie has a known issue reading from extension pages written by a service worker** — the gallery bypasses Dexie entirely and reads IndexedDB directly via raw `indexedDB.open()`. This is intentional and should not be "fixed" by switching back to Dexie in the gallery.
+- **Always remove + reload the extension, never just refresh** — stale service worker survives a refresh and serves old background code. Burned time on this multiple times.
+- **Virtual row height estimation: always over-estimate** — under-estimating `estimateSize` causes the scroll position to jump downward as real heights land. Over-estimating causes the scrollbar to correct upward, which is imperceptible.
+- **X Article cards have no `[data-testid="tweetText"]`** — the scraper silently produced blank cards for articles until a specific fix. Any future scraper work should test against article cards explicitly.
+- **`.bookmarkgarden` import does not update `lastIndexedTweetId`** — intentional. Imported bookmarks are foreign data; the incremental indexing cursor should only advance from native X scrapes.
+
+---
+
 ## Data shape reference
 
 ### Bookmark record fields

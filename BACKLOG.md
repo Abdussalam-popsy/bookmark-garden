@@ -12,7 +12,7 @@ Non-negotiable quality bar. These gate the Chrome Web Store release.
 
 - [x] **Virtual scrolling** — shipped S12. `@tanstack/react-virtual` with `useWindowVirtualizer`.
 - [x] **Masonry / content-aware layout** — shipped S13. `items-start` grid, per-type card treatments (text-only 15px/5-line, article link block, image-first unchanged).
-- [ ] **Per-collection export / sharing** — export a single collection as its own `.bookmarkgarden`. Core sharing primitive.
+- [x] **Per-collection export / sharing** — shipped S15. Export icon on each collection pill in the header; naming modal, `.bookmarkgarden` download.
 - [ ] **Indexing reliability** — long runs (1000+ bookmarks) without silent failure, dropped batches, or stalling. Needs field testing.
 - [ ] **Landing page** — `absalom.dev` (or subdomain). Required for Store listing and word-of-mouth sharing.
 - [ ] **Chrome Web Store submission** — screenshots, description, privacy policy, review process.

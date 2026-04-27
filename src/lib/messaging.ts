@@ -64,6 +64,20 @@ export interface ImportBookmarksMessage {
   payload: Bookmark[];
 }
 
+/** Gallery → Background: permanently delete bookmarks by ID */
+export interface DeleteBookmarksMessage {
+  type: "DELETE_BOOKMARKS";
+  payload: { ids: string[] };
+}
+
+/** Gallery → Background: set the full collections[] array for a batch of bookmarks.
+ *  Used for both "add to collection" and "remove from collection" — gallery computes
+ *  the new arrays and sends them; background writes blindly. */
+export interface BatchUpdateCollectionsMessage {
+  type: "BATCH_UPDATE_COLLECTIONS";
+  payload: { updates: Array<{ id: string; collections: string[] }> };
+}
+
 /** Union of every message that can travel through the extension */
 export type ExtensionMessage =
   | StartIndexingMessage
@@ -72,7 +86,9 @@ export type ExtensionMessage =
   | StopIndexingMessage
   | IndexingProgressMessage
   | UpdateBookmarkTagsMessage
-  | ImportBookmarksMessage;
+  | ImportBookmarksMessage
+  | DeleteBookmarksMessage
+  | BatchUpdateCollectionsMessage;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
