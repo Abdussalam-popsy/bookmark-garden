@@ -640,13 +640,23 @@ function BookmarkCard({ bookmark, onTagClick }: { bookmark: Bookmark; onTagClick
     externalLink?.image;
 
   const isVideo = media.some((m) => m.type === "video");
+  const isTextOnly = !heroImage;
+
+  let faviconUrl: string | null = null;
+  if (externalLink?.url) {
+    try {
+      faviconUrl = `https://www.google.com/s2/favicons?domain=${new URL(externalLink.url).hostname}&sz=16`;
+    } catch {
+      faviconUrl = null;
+    }
+  }
 
   return (
     <a
       href={`https://x.com/${authorHandle}/status/${bookmark.id}`}
       target="_blank"
       rel="noreferrer"
-      className="group flex flex-col rounded-xl border border-gray-200 bg-white overflow-hidden hover:shadow-md transition-shadow no-underline"
+      className="group flex flex-col h-[340px] rounded-xl border border-gray-200 bg-white overflow-hidden hover:shadow-md transition-shadow no-underline"
     >
       {/* Hero image */}
       {heroImage && (
@@ -688,11 +698,47 @@ function BookmarkCard({ bookmark, onTagClick }: { bookmark: Bookmark; onTagClick
           <TypeBadge type={contentType} />
         </div>
 
-        {/* Tweet text */}
-        {text && <p className="text-sm text-gray-700 line-clamp-3 leading-snug">{text}</p>}
+        {/* Tweet text — larger and less clamped when text is the only visual */}
+        {text && (
+          <p
+            className={`leading-snug text-gray-700 ${
+              isTextOnly ? "text-[15px] line-clamp-5" : "text-sm line-clamp-3"
+            }`}
+          >
+            {text}
+          </p>
+        )}
 
-        {/* Link card title */}
-        {externalLink?.title && (
+        {/* Article link preview block — always shown for articles */}
+        {contentType === "article" && externalLink && (
+          <div className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2 flex items-start gap-2">
+            {faviconUrl && (
+              <img
+                src={faviconUrl}
+                alt=""
+                className="mt-0.5 h-4 w-4 shrink-0"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
+            )}
+            <div className="min-w-0">
+              {externalLink.siteName && (
+                <p className="text-[10px] font-medium uppercase tracking-wide text-gray-400 truncate">
+                  {externalLink.siteName}
+                </p>
+              )}
+              {externalLink.title && (
+                <p className="text-xs font-medium text-gray-800 leading-snug line-clamp-2">
+                  {externalLink.title}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Non-article external link title */}
+        {contentType !== "article" && externalLink?.title && (
           <p className="text-xs text-blue-600 truncate">{externalLink.title}</p>
         )}
 

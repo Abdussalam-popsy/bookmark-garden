@@ -4,6 +4,12 @@ Append-only. Most recent at top. Add entries when features ship.
 
 ---
 
+## 2026-04-27 — Session 13
+
+- **design: per-content-type card treatments** — removed the dead zone that appeared on short cards in rows with taller neighbours. Root fix: `items-start` on the virtual grid row so cells don't stretch to row height. Four distinct visual treatments: (1) **Text-only** (note, thread, code — any card without a hero image): body text increased to 15px, line clamp raised to 5 lines so text has presence as the sole visual element. (2) **Image/video/design**: unchanged — hero image fills top, text below. (3) **Article**: always shows a tinted link preview block (favicon + site name + headline in a `bg-gray-50` rounded container) regardless of whether a hero image is also present — makes article cards consistently identifiable. (4) **Non-article links**: retain existing small blue title treatment. Favicon loaded via Google S2 service with `onError` hide fallback. No changes to virtualisation, filters, or search.
+
+---
+
 ## 2026-04-27 — Session 12
 
 - **perf: virtual scrolling** — gallery no longer renders all cards on load. Added `@tanstack/react-virtual` with `useWindowVirtualizer`. Items are chunked into rows, only viewport-visible rows are mounted in the DOM. Column count (1/2/3/4) is derived from container width via `ResizeObserver`, mirroring the existing Tailwind `sm/lg/xl` breakpoints. Row heights are measured dynamically after render; `estimateSize` is set to 400px (a deliberate over-estimate) so scroll position corrects upward rather than jumping as real heights land. All filters — search, content type, tags, collections, date range, sort — compose identically; they reduce the item list before the virtualiser sees it.

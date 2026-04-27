@@ -10,8 +10,8 @@ Shipped items removed from this file: Search (Fuse.js, S8), Tagging (S8), Sort b
 
 Non-negotiable quality bar. These gate the Chrome Web Store release.
 
-- [ ] **Virtual scrolling** — 6000+ bookmarks make the gallery unusable. `react-window` or `@tanstack/react-virtual`. Non-negotiable.
-- [ ] **Masonry / content-aware layout** — makes the gallery look intentional rather than placeholder. Two card variants: media-first and text-only.
+- [x] **Virtual scrolling** — shipped S12. `@tanstack/react-virtual` with `useWindowVirtualizer`.
+- [x] **Masonry / content-aware layout** — shipped S13. `items-start` grid, per-type card treatments (text-only 15px/5-line, article link block, image-first unchanged).
 - [ ] **Per-collection export / sharing** — export a single collection as its own `.bookmarkgarden`. Core sharing primitive.
 - [ ] **Indexing reliability** — long runs (1000+ bookmarks) without silent failure, dropped batches, or stalling. Needs field testing.
 - [ ] **Landing page** — `absalom.dev` (or subdomain). Required for Store listing and word-of-mouth sharing.
