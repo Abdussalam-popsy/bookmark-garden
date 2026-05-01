@@ -4,6 +4,38 @@ Append-only. Add new items to the appropriate section. Move items to CHANGELOG.m
 
 Shipped items removed from this file: Search (Fuse.js, S8), Tagging (S8), Sort by date (S7), Export/Import .bookmarkgarden (S9), Date range filter (S11).
 
+Status note, 2026-05-01: older sections below are preserved for history, but the current priority order is now tracked in the "Current priority order" section. Items already shipped in CHANGELOG.md should not be treated as active backlog even if they still appear in older sections.
+
+---
+
+## Current priority order
+
+### Near-term — prioritised for this weekend
+
+- **UI & interaction polish pass** — card design, typography, spacing, and micro-interactions. This is the v2 launch face and the active sprint focus.
+
+- **Onboarding card** — shown once on first popup open. Tells the user: indexing takes a while; you can stop and resume any time; already-indexed bookmarks are safe; you'll be notified when indexing is done.
+
+- **Pinnable gallery tab** — register a stable internal Chrome URL so the gallery can be pinned as a tab and opened directly without going through the extension popup.
+
+### Medium-term
+
+- **Background indexing** — clicking index opens the X bookmarks tab and scrapes in the background. User can browse freely. Extension notifies when complete or if something goes wrong. User is never stuck babysitting a tab. Architecturally planned but deferred from this weekend sprint.
+
+- **Chrome new tab override** — when opening a new tab, show 3-7 passively surfaced bookmarks from the library as a quiet recall prompt. Not the full gallery. Glance, remember something interesting, move on.
+
+- **Link and website preview** — save any URL and preview it inline without leaving Bookmark Garden. Any link shared in the experience should be previewable. Ties into the core idea of never sending the user back to the original platform; applies to social platforms too, such as saved tweets/posts being previewable from the platform.
+
+### Long-term / someday
+
+- **Resurface mode / inspire me view + curation system** — algorithm surfaces bookmarks you haven't seen in a while using spaced repetition logic. Pairs with the new tab feature as the delivery mechanism. Includes a curation workflow for judging what stays and what goes: "This deserves to stay" / "This should go."
+
+- **AI integration** — bring-your-own API key; natural language queries over your index, e.g. "show me my most interesting design saves from 2024."
+
+- **Multi-platform scraping** — Instagram and LinkedIn using the same DOM scraping approach, with no API dependency so it can stay free/cheap.
+
+- **Mobile access** — getting the gallery beyond the extension popup. Likely requires cloud sync as an opt-in later, not a core pivot.
+
 ---
 
 ## Pre-launch — must ship before Store submission

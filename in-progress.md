@@ -1,10 +1,28 @@
 # Bookmark Garden — In Progress
 
-Last updated: 2026-04-26 (session 4)
+Last updated: 2026-05-01 (planning sync)
+
+---
+
+## Current sprint — 2026-05-01
+
+Active focus for this weekend: **UI & interaction polish pass** for the v2 launch face.
+
+Scope:
+- Card design polish
+- Typography pass
+- Spacing and density cleanup
+- Micro-interactions and small interaction details
+- First-open onboarding card in the popup
+- Pinnable gallery tab / stable internal Chrome URL, if the polish sprint has capacity
+
+Explicitly deferred: **background indexing**. The architecture is planned and belongs in the medium-term backlog, but it is not part of this sprint.
 
 ---
 
 ## Current state
+
+Historical snapshot from session 4. Kept for context; see the 2026-04-27 and 2026-05-01 updates below for the current product state.
 
 Extension is functional end-to-end. Indexing pipeline scrolls x.com/i/bookmarks, parses tweets into typed Bookmark records, flushes to IndexedDB every 25 tweets, and the gallery React app reads and renders them. Roughly ~1500 bookmarks indexed across runs (including a partial mid-session run reaching Sep 2025). No tagging, search, or sort yet. Next session starts immediately on resumable indexing — approach approved and fully documented in BACKLOG.md.
 
@@ -71,6 +89,29 @@ A lot has shipped since session 4. Capturing it here as a block rather than per-
 
 Gallery is fast and usable at ~10k bookmarks. All filters compose correctly. Two pre-launch items checked off: virtual scrolling and content-aware layout. Remaining pre-launch gates: per-collection export, indexing reliability at scale (1000+ run), landing page, Store submission.
 
+## Update — 2026-05-01
+
+### Active sprint focus
+
+UI polish is now the active sprint focus for this weekend. The goal is to make the current extension feel launch-ready: card design, typography, spacing, and micro-interactions.
+
+### Planned but deferred
+
+Background indexing is architecturally planned but not in this sprint. Current intended behaviour: clicking index opens the X bookmarks tab, scraping runs in the background, the user can browse freely, and the extension notifies on completion or failure.
+
+### Current priority order
+
+1. UI & interaction polish pass
+2. Onboarding card
+3. Pinnable gallery tab
+4. Background indexing
+5. Chrome new tab override
+6. Link and website preview
+7. Resurface mode / inspire me view + curation system
+8. AI integration
+9. Multi-platform scraping
+10. Mobile access
+
 ### Lessons learned
 
 - **Dexie has a known issue reading from extension pages written by a service worker** — the gallery bypasses Dexie entirely and reads IndexedDB directly via raw `indexedDB.open()`. This is intentional and should not be "fixed" by switching back to Dexie in the gallery.
@@ -94,7 +135,7 @@ Gallery is fast and usable at ~10k bookmarks. All filters compose correctly. Two
 | `text` | `string` | no | Full tweet text |
 | `media` | `MediaItem[]` | no | Array of image/video objects |
 | `externalLink` | `ExternalLink \| null` | no | Link card data |
-| `contentType` | `ContentType` | yes | `"article" \| "video" \| "design" \| "thread" \| "code" \| "note"` |
+| `contentType` | `ContentType` | yes | Current UI uses `"image"` rather than the retired `"design"` label. Historical records are migrated by `RUN_MIGRATIONS`. |
 | `tags` | `string[]` | yes (multi-entry) | Each tag indexed separately |
 | `collections` | `string[]` | yes (multi-entry) | Each collection indexed separately |
 | `notes` | `string` | no | Freeform user notes |

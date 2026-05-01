@@ -2,6 +2,8 @@
 
 Append-only. Most recent at top. Add entries when features ship.
 
+Planning sync, 2026-05-01: no new shipped product features are being added to this changelog from the current backlog update. Active and planned work is tracked in BACKLOG.md and IN-PROGRESS.md until it ships.
+
 ---
 
 ## 2026-04-27 — Session 17
