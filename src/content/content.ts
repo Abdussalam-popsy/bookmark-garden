@@ -166,10 +166,16 @@ function createOverlay(): Overlay {
     "box-shadow:0 4px 24px rgba(0,0,0,0.6)",
     "border:1px solid rgba(255,255,255,0.08)",
     "min-width:220px",
-    "pointer-events:none",
+    "pointer-events:auto",
   ].join(";");
 
   document.body.appendChild(el);
+
+  el.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).dataset.action === "stop") {
+      stopRequested = true;
+    }
+  });
 
   const render = (html: string) => {
     el.innerHTML = html;
@@ -183,7 +189,8 @@ function createOverlay(): Overlay {
     render(
       `<b>Bookmark Garden</b><br>` +
         `Found <b>${_found}</b> · Saved <b>${_saved}</b>` +
-        (_position ? `<br><span style="color:#8b98a5;font-size:11px">${_position}</span>` : "")
+        (_position ? `<br><span style="color:#8b98a5;font-size:11px">${_position}</span>` : "") +
+        `<br><button data-action="stop" style="margin-top:8px;width:100%;font-size:13px;font-weight:600;color:#fff;background:#ef4444;border:none;border-radius:12px;padding:8px 16px;cursor:pointer;text-align:center">■ Stop indexing</button>`
     );
   }
 

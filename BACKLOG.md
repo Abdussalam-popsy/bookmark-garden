@@ -2,7 +2,7 @@
 
 Append-only. Add new items to the appropriate section. Move items to CHANGELOG.md when shipped.
 
-Shipped items removed from this file: Search (Fuse.js, S8), Tagging (S8), Sort by date (S7), Export/Import .bookmarkgarden (S9), Date range filter (S11).
+Shipped items removed from this file: Scaffold + message bus (S1), Scroll loop + gallery (S1–S2), Gallery bundle fix (S3), Resumable indexing (S5), Stop/cancel indexing (S6), SPA injection fix (S7), Sort by date (S7), Search/Fuse.js (S8), Free-form tagging (S8), Export/Import .bookmarkgarden (S9), X Article scraping fix (S10), Date range filter (S11), Virtual scrolling (S12), Content-aware card treatments (S13), Multi-select + bulk delete (S14), Per-collection export (S15), Tags→Collections migration + "design"→"image" rename + editable content type badge (S16), Collection context bar + universal export naming modal fix + trash icon on pills (S17).
 
 Status note, 2026-05-01: older sections below are preserved for history, but the current priority order is now tracked in the "Current priority order" section. Items already shipped in CHANGELOG.md should not be treated as active backlog even if they still appear in older sections.
 
@@ -122,3 +122,60 @@ Items to build in the next 1–2 sessions, in order.
 - **Daily review mode** — surface 10 bookmarks you haven't revisited in a while, presented in swipe/focus view. Spaced repetition for ideas. Pairs directly with resurface mode.
 
 - **Reminders** — flag a bookmark as "read later" and get a notification or resurface prompt at a set time. Chrome alarms API + `chrome.notifications`.
+
+---
+
+## Lessons learned
+
+Operational gotchas confirmed across multiple sessions. Treat these as hard rules.
+
+- **Dexie cross-context bug** — Dexie has a known issue reading from extension pages when the DB was written by a service worker. The gallery reads IndexedDB directly via raw `indexedDB.open("BookmarkGarden")`. This is intentional. Do not "fix" it by switching back to Dexie in the gallery.
+
+- **Always remove + reload, never just refresh** — a stale service worker survives an extension refresh and keeps serving old background code. Always go to `chrome://extensions`, remove the extension, then Load unpacked again. Burned multiple sessions on this.
+
+- **Virtual row `estimateSize`: always over-estimate** — `@tanstack/react-virtual` uses `estimateSize` before real heights are measured. Under-estimating causes scroll position to jump downward as real heights land. Over-estimating corrects upward, which is imperceptible. Current value: 400px.
+
+- **X Article cards have no `[data-testid="tweetText"]`** — the scraper silently produced blank cards for all X Articles until an explicit fix was added (S10). Any future scraper work must be tested against article cards.
+
+- **Import does not update `lastIndexedTweetId`** — intentional. Imported bookmarks are foreign data; the incremental indexing cursor must only advance from native X scrapes. Do not change this.
+
+- **`npm run dev` = `vite build --watch`** — `vite dev` causes service worker CORS failures (CRXJS + Vite 8 incompatibility). The dev script runs `vite build --watch` for ~400ms incremental rebuilds.
+
+---
+
+## Data shape reference
+
+### Bookmark record
+
+| Field | Type | Indexed? | Notes |
+|---|---|---|---|
+| `id` | `string` | **primary key** | Tweet ID — stable, used for upsert |
+| `authorHandle` | `string` | yes | e.g. `"naval"` |
+| `authorName` | `string` | no | Display name |
+| `authorAvatar` | `string` | no | Profile image URL |
+| `text` | `string` | no | Full tweet text |
+| `media` | `MediaItem[]` | no | Array of image/video objects |
+| `externalLink` | `ExternalLink \| null` | no | Link card data |
+| `contentType` | `ContentType` | yes | `"article" \| "video" \| "image" \| "thread" \| "code" \| "note"` |
+| `tags` | `string[]` | yes (multi-entry) | Legacy — migrated into `collections` (S16). Should be empty on all records post-migration. |
+| `collections` | `string[]` | yes (multi-entry) | Each collection indexed separately |
+| `notes` | `string` | no | Freeform user notes |
+| `bookmarkedAt` | `Date` | yes | When bookmarked on X |
+| `indexedAt` | `Date` | yes | When we scraped it |
+| `xFolder` | `string \| null` | no | X's native folder name, if any |
+
+**`MediaItem`** — `{ type: "image" | "video", url, width?, height?, posterUrl?, duration? }`
+
+**`ExternalLink`** — `{ url, title?, description?, image?, siteName? }`
+
+### Indexed vs unindexed
+
+**Indexed fields** (`authorHandle`, `contentType`, `bookmarkedAt`, `indexedAt`, `tags`, `collections`) can be queried directly and cheaply:
+```ts
+db.bookmarks.where("contentType").equals("video").toArray()
+db.bookmarks.where("authorHandle").equals("naval").toArray()
+db.bookmarks.where("bookmarkedAt").between(start, end).toArray()
+db.bookmarks.where("collections").equals("design").toArray()
+```
+
+**Unindexed fields** (`text`, `authorName`, `media`, `externalLink`, `notes`, `xFolder`) require a full scan — load all records then filter in JS. Full-text search on `text` uses Fuse.js (acceptable at current scale).
